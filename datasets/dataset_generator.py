@@ -47,11 +47,24 @@ def generate_dataset(num_machines=250, records_per_machine=365, output_path="dat
     df = pd.DataFrame(records)
     
     # Reorder columns
-    cols = ["Timestamp", "Temperature", "Vibration", "Motor_Current", "Machine_Health", "Machine_Status", "Remaining_Useful_Life_Days"]
+    cols = [
+        "Timestamp",
+        "Temperature",
+        "Vibration",
+        "Motor_Current",
+        "Pressure",
+        "RPM",
+        "Flow_Rate",
+        "Oil_Temperature",
+        "Power_Consumption",
+        "Machine_Health",
+        "Machine_Status",
+        "Remaining_Useful_Life_Days"
+    ]
     df = df[cols]
     
     # Introduce synthetic missing values (2%) for preprocessing validation
-    for col in ["Temperature", "Vibration", "Motor_Current"]:
+    for col in ["Temperature", "Vibration", "Motor_Current", "Pressure", "RPM", "Flow_Rate", "Oil_Temperature", "Power_Consumption"]:
         mask = pd.Series([True] * len(df)).sample(frac=0.02, random_state=42).index
         df.loc[mask, col] = None
         

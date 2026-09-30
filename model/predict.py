@@ -4,76 +4,91 @@ import numpy as np
 import os
 
 class PredictiveMaintenanceModel:
-    def __init__(
-        self,
-        rf_model_path="models/rf_rul_model.pkl",
-        xgb_model_path="models/xgb_rul_model.pkl",
-        scaler_path="models/scaler.pkl"
-    ):
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    def __init__(self, model_path="models/rf_rul_model.pkl", scaler_path="models/scaler.pkl"):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
         
-        # Helper to resolve relative path against base_dir
         def resolve_path(p):
-            if not os.path.exists(p):
-                alt = os.path.join(base_dir, p)
-                if os.path.exists(alt):
-                    return alt
+            if os.path.exists(p):
+                return p
+            p_from_cur = os.path.join(current_dir, p)
+            if os.path.exists(p_from_cur):
+                return p_from_cur
+            p_from_parent = os.path.join(os.path.dirname(current_dir), p)
+            if os.path.exists(p_from_parent):
+                return p_from_parent
             return p
 
-        rf_path = resolve_path(rf_model_path)
-        xgb_path = resolve_path(xgb_model_path)
-        sc_path = resolve_path(scaler_path)
+        resolved_model = resolve_path(model_path)
+        resolved_scaler = resolve_path(scaler_path)
 
-        # Load scaler
-        self.scaler = joblib.load(sc_path) if os.path.exists(sc_path) else None
-
-        # Load Random Forest model
-        self.rf_model = joblib.load(rf_path) if os.path.exists(rf_path) else None
-        # Backwards-compatibility alias
-        self.model = self.rf_model
-
-        # Load XGBoost model
-        self.xgb_model = joblib.load(xgb_path) if os.path.exists(xgb_path) else None
-
-    def predict_rul(self, temperature, vibration, current, model_type="rf"):
-        """
-        Predict Remaining Useful Life (RUL) in days using either Random Forest ('rf') or XGBoost ('xgb').
-        """
-        if not self.scaler:
-            return 0
-            
-        df = pd.DataFrame({
-            "Temperature": [float(temperature)],
-            "Vibration": [float(vibration)],
-            "Motor_Current": [float(current)]
-        })
-        
-        X_scaled = self.scaler.transform(df)
-        
-        # Select active model
-        m_type = str(model_type).lower()
-        if m_type in ["xgb", "xgboost"] and self.xgb_model is not None:
-            active_model = self.xgb_model
-        elif self.rf_model is not None:
-            active_model = self.rf_model
-        elif self.xgb_model is not None:
-            active_model = self.xgb_model
+        if os.path.exists(resolved_model) and os.path.exists(resolved_scaler):
+            self.model = joblib.load(resolved_model)
+            self.scaler = joblib.load(resolved_scaler)
         else:
-            return 0
+            self.model = None
+            self.scaler = None
 
-        rul_pred = active_model.predict(X_scaled)[0]
-        return max(0, int(round(float(rul_pred))))
+    def predict_rul(self, temperature, vibration, current, pressure=5.0, rpm=1750.0, flow_rate=150.0, oil_temperature=45.0, power_consumption=15.0, torque=None, acoustic_emission=None):
+        if torque is None:
+            torque = round(float(9550.0 * power_consumption / max(100.0, rpm)), 2)
+        if acoustic_emission is None:
+            acoustic_emission = round(float(35.0 + 15.0 * np.log10(1.0 + max(0.0, vibration) / 0.18)), 2)
 
-    def predict_both(self, temperature, vibration, current):
+        preds = self.predict_rul_batch([{
+            "Temperature": temperature,
+            "Vibration": vibration,
+            "Motor_Current": current,
+            "Pressure": pressure,
+            "RPM": rpm,
+            "Flow_Rate": flow_rate,
+            "Oil_Temperature": oil_temperature,
+            "Power_Consumption": power_consumption,
+            "Torque": torque,
+            "Acoustic_Emission": acoustic_emission
+        }])
+        return preds[0] if preds else 0
+
+    def predict_rul_batch(self, records_or_df):
         """
-        Predict RUL using both Random Forest and XGBoost side-by-side.
+        Executes TRUE BATCH ML INFERENCE for all machines in a single pass.
+        Accepts a DataFrame or list of dicts containing all 10 telemetry features.
+        Executes EXACTLY ONE scaler.transform() and ONE model.predict() call for the entire fleet batch.
+        Returns a list of integer RUL predictions.
         """
-        rul_rf = self.predict_rul(temperature, vibration, current, model_type="rf")
-        rul_xgb = self.predict_rul(temperature, vibration, current, model_type="xgb")
-        return {
-            "random_forest": rul_rf,
-            "xgboost": rul_xgb
-        }
+        if not self.model or not self.scaler:
+            if isinstance(records_or_df, list):
+                return [0] * len(records_or_df)
+            return [0] * len(records_or_df.index)
+
+        if isinstance(records_or_df, list):
+            df = pd.DataFrame(records_or_df)
+        else:
+            df = records_or_df.copy()
+
+        # If Torque or Acoustic_Emission are missing in records, derive via physics models
+        if "Torque" not in df.columns:
+            pwr = df["Power_Consumption"] if "Power_Consumption" in df.columns else 15.0
+            r = df["RPM"] if "RPM" in df.columns else 1750.0
+            df["Torque"] = (9550.0 * pwr / np.maximum(100.0, r)).round(2)
+
+        if "Acoustic_Emission" not in df.columns:
+            vib = df["Vibration"] if "Vibration" in df.columns else 0.20
+            df["Acoustic_Emission"] = (35.0 + 15.0 * np.log10(1.0 + np.maximum(0.0, vib) / 0.18)).round(2)
+
+        feature_cols = [
+            "Temperature", "Vibration", "Motor_Current",
+            "Pressure", "RPM", "Flow_Rate", "Oil_Temperature", "Power_Consumption",
+            "Torque", "Acoustic_Emission"
+        ]
+        # Fill missing features if any record lacks any feature
+        for col in feature_cols:
+            if col not in df.columns:
+                df[col] = 0.0
+
+        X_features = df[feature_cols]
+        X_scaled = self.scaler.transform(X_features)
+        raw_preds = self.model.predict(X_scaled)
+        return [max(0, int(round(p))) for p in raw_preds]
 
 
 def filter_displayed_rul(raw_prediction, prev_displayed_rul=None, health=100.0):

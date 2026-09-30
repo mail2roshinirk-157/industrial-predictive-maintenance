@@ -1,8 +1,7 @@
 import React from 'react';
-import Plot from './Plot';
+import Plot from 'react-plotly.js';
 
 const GaugeCard = ({ value, statusColor = '#22C55E' }) => {
-
   const healthVal = value ?? 100;
 
   return (

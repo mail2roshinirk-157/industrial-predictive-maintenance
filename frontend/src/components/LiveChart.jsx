@@ -1,67 +1,7 @@
 import React, { useState, useRef } from 'react';
-import Plot from './Plot';
+import Plot from 'react-plotly.js';
+import { calculateAdaptiveYRange } from '../services/chartUtils';
 
-export function calculateAdaptiveYRange(dataArray, minClamp, maxClamp, minSpan, type, rangeRef) {
-  if (!dataArray || dataArray.length === 0) {
-    return [minClamp, maxClamp];
-  }
-
-  const rawMin = Math.min(...dataArray);
-  const rawMax = Math.max(...dataArray);
-
-  let targetMin, targetMax;
-
-  if (type === 'temperature') {
-    targetMin = Math.floor(rawMin - 1.0);
-    targetMax = Math.ceil(rawMax + 1.0);
-  } else if (type === 'vibration') {
-    targetMin = rawMin - 0.15;
-    targetMax = rawMax + 0.15;
-  } else if (type === 'current') {
-    targetMin = rawMin - 0.5;
-    targetMax = rawMax + 0.5;
-  } else if (type === 'rul') {
-    targetMin = rawMin - 40.0;
-    targetMax = rawMax + 40.0;
-  } else {
-    targetMin = rawMin - 1.0;
-    targetMax = rawMax + 1.0;
-  }
-
-  if (targetMax - targetMin < minSpan) {
-    const mid = (targetMax + targetMin) / 2;
-    targetMin = mid - minSpan / 2;
-    targetMax = mid + minSpan / 2;
-  }
-
-  targetMin = Math.max(minClamp, targetMin);
-  targetMax = Math.min(maxClamp, targetMax);
-
-  if (targetMax - targetMin < minSpan) {
-    if (targetMin === minClamp) {
-      targetMax = Math.min(maxClamp, targetMin + minSpan);
-    } else if (targetMax === maxClamp) {
-      targetMin = Math.max(minClamp, targetMax - minSpan);
-    }
-  }
-
-  // 15% Hysteresis check
-  if (rangeRef && rangeRef.current) {
-    const [cMin, cMax] = rangeRef.current;
-    const cSpan = cMax - cMin;
-    const thresh = 0.15 * cSpan;
-
-    if (rawMin > cMin + thresh && rawMax < cMax - thresh) {
-      return rangeRef.current;
-    }
-  }
-
-  const res = [Math.round(targetMin * 100) / 100, Math.round(targetMax * 100) / 100];
-  if (rangeRef) {
-    rangeRef.current = res;
-  }
-  return res;
-}
 
 const LiveChart = ({ historyData }) => {
   const [selectedMetric, setSelectedMetric] = useState('Temperature');
@@ -69,30 +9,35 @@ const LiveChart = ({ historyData }) => {
   const currentRangeRef = useRef(null);
 
   const metricConfigs = {
-    Temperature: { label: 'Temperature (°C)', key: 'temperature_trend', color: '#2563EB', unit: '°C', minClamp: 55, maxClamp: 85, minSpan: 6, type: 'temperature', dtick: 2, minorDtick: 0.5 },
+    Temperature: { label: 'Operating Temp (°C)', key: 'temperature_trend', color: '#2563EB', unit: '°C', minClamp: 55, maxClamp: 85, minSpan: 6, type: 'temperature', dtick: 2, minorDtick: 0.5 },
     Vibration: { label: 'Vibration RMS (mm/s)', key: 'vibration_trend', color: '#2563EB', unit: 'mm/s', minClamp: 0, maxClamp: 6, minSpan: 1, type: 'vibration', dtick: 0.5, minorDtick: 0.1 },
     Motor_Current: { label: 'Motor Current (A)', key: 'motor_current_trend', color: '#2563EB', unit: 'A', minClamp: 5, maxClamp: 25, minSpan: 3, type: 'current', dtick: 2, minorDtick: 0.5 },
+    Pressure: { label: 'Operating Pressure (bar)', key: 'pressure_trend', color: '#2563EB', unit: 'bar', minClamp: 2.0, maxClamp: 8.0, minSpan: 1.0, type: 'pressure', dtick: 1.0, minorDtick: 0.2 },
+    RPM: { label: 'Shaft Speed (RPM)', key: 'rpm_trend', color: '#2563EB', unit: 'RPM', minClamp: 1500, maxClamp: 1900, minSpan: 60, type: 'rpm', dtick: 50, minorDtick: 10 },
+    Flow_Rate: { label: 'Fluid Flow Rate (L/min)', key: 'flow_rate_trend', color: '#2563EB', unit: 'L/min', minClamp: 90, maxClamp: 180, minSpan: 15, type: 'flow', dtick: 15, minorDtick: 5 },
+    Oil_Temperature: { label: 'Lube Oil Temp (°C)', key: 'oil_temperature_trend', color: '#2563EB', unit: '°C', minClamp: 35, maxClamp: 75, minSpan: 6, type: 'oil_temperature', dtick: 5, minorDtick: 1 },
+    Power_Consumption: { label: 'Power Demand (kW)', key: 'power_consumption_trend', color: '#2563EB', unit: 'kW', minClamp: 10, maxClamp: 30, minSpan: 4, type: 'power', dtick: 3, minorDtick: 1 },
+    Torque: { label: 'Shaft Torque (Nm)', key: 'torque_trend', color: '#2563EB', unit: 'Nm', minClamp: 50, maxClamp: 150, minSpan: 15, type: 'torque', dtick: 10, minorDtick: 2 },
+    Acoustic_Emission: { label: 'Acoustic Emission (dB)', key: 'acoustic_emission_trend', color: '#2563EB', unit: 'dB', minClamp: 20, maxClamp: 80, minSpan: 10, type: 'acoustic_emission', dtick: 10, minorDtick: 2 },
   };
 
   const config = metricConfigs[selectedMetric] || metricConfigs.Temperature;
-  const rawTrend = historyData?.[config.key];
-  const actualArr = Array.isArray(rawTrend?.actual) ? rawTrend.actual : [];
-  const predictedArr = Array.isArray(rawTrend?.predicted_future) ? rawTrend.predicted_future : [];
-  const healthTrend = Array.isArray(historyData?.machine_health_trend?.actual) ? historyData.machine_health_trend.actual : [];
+  const trend = historyData?.[config.key] || { actual: [], predicted_future: [] };
+  const healthTrend = historyData?.machine_health_trend?.actual || [];
 
-  const xHist = actualArr.map((_, i) => i + 1);
+  const xHist = trend.actual.map((_, i) => i + 1);
   const latestDay = xHist.length > 0 ? xHist[xHist.length - 1] : 1;
-  const xFuture = actualArr.length > 0
-    ? predictedArr.map((_, i) => latestDay + i)
+  const xFuture = trend.actual.length > 0
+    ? trend.predicted_future.map((_, i) => latestDay + i)
     : [];
 
   const visibleMin = Math.max(1, latestDay - 100);
   const visibleMax = latestDay + 20;
 
   // Purely local in-memory transformation (zero backend network calls)
-  const baseline = actualArr.length > 0 ? actualArr[0] : 0;
-  const yActual = isDeviationView ? actualArr.map((v) => roundDec(v - baseline, 2)) : actualArr;
-  const yPredicted = isDeviationView ? predictedArr.map((v) => roundDec(v - baseline, 2)) : predictedArr;
+  const baseline = trend.actual.length > 0 ? trend.actual[0] : 0;
+  const yActual = isDeviationView ? trend.actual.map((v) => roundDec(v - baseline, 2)) : trend.actual;
+  const yPredicted = isDeviationView ? trend.predicted_future.map((v) => roundDec(v - baseline, 2)) : trend.predicted_future;
   
   const adaptiveYRange = calculateAdaptiveYRange(
     yActual,
@@ -109,7 +54,6 @@ const LiveChart = ({ historyData }) => {
   function roundDec(val, dec = 2) {
     return Math.round(val * Math.pow(10, dec)) / Math.pow(10, dec);
   }
-
 
   // Telemetry-driven degradation detection (first day health drops below 98.0%)
   let degradationDay = null;
@@ -152,7 +96,7 @@ const LiveChart = ({ historyData }) => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-200 mb-2 gap-2">
         <div>
           <h2 className="text-sm font-bold text-gray-900">Live Sensor Stream & Predictive Projection</h2>
-          <p className="text-xs text-gray-500">Real-time signal analysis across digital twin lifecycle</p>
+          <p className="text-xs text-gray-500">Real-time signal analysis across digital twin lifecycle (10 Telemetry Parameters)</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -188,9 +132,16 @@ const LiveChart = ({ historyData }) => {
               }}
               className="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block px-3 py-1.5 font-medium cursor-pointer"
             >
-              <option value="Temperature">Temperature (°C)</option>
+              <option value="Temperature">Operating Temp (°C)</option>
+              <option value="Oil_Temperature">Lube Oil Temp (°C)</option>
               <option value="Vibration">Vibration RMS (mm/s)</option>
+              <option value="RPM">Shaft Speed (RPM)</option>
+              <option value="Pressure">Operating Pressure (bar)</option>
+              <option value="Flow_Rate">Flow Rate (L/min)</option>
               <option value="Motor_Current">Motor Current (A)</option>
+              <option value="Power_Consumption">Power Demand (kW)</option>
+              <option value="Torque">Shaft Torque (Nm)</option>
+              <option value="Acoustic_Emission">Acoustic Emission (dB)</option>
             </select>
           </div>
         </div>

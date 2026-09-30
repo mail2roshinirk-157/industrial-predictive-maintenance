@@ -7,6 +7,7 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+**/dist/
 downloads/
 eggs/
 .eggs/
@@ -76,7 +77,3 @@ pnpm-debug.log*
 # Operating System files
 .DS_Store
 Thumbs.db
-
-# Portable Node.js folder
-node_portable/
-

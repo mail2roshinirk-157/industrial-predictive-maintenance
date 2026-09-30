@@ -5,35 +5,50 @@
 
 ## Executive Summary & Architecture Overview
 
-This platform is an enterprise-grade industrial predictive maintenance solution designed to monitor mechanical assets in real time, predict Remaining Useful Life (RUL) using ensemble machine learning, translate failure predictions into actionable servicing policies using an intelligent Maintenance Decision Engine, detect equipment degradation before failure occurs, and provide interactive visual analytics to plant operators.
+This platform is an enterprise-grade industrial predictive maintenance solution designed to monitor an 8-machine fleet (`M-001` through `M-008`) in real time, predict Remaining Useful Life (RUL) using batch ensemble machine learning, translate failure predictions into actionable servicing policies using an intelligent Maintenance Decision Engine, detect equipment degradation before failure occurs, and provide interactive visual analytics to plant operators.
 
-### System Architecture Flow Diagram (Single AI Model + Decision Engine)
+### System Architecture Flow Diagram (8-Machine Synchronized Fleet + Single-Model Batch Inference)
 ```
-Real Machine ──①──> IoT Sensor ──②──> MQTT/Kafka ──③──> FastAPI Backend
-                                                            │
-                                                            ▼
-                                                 ④ Preprocessing Pipeline
-                                                            │
-                                                            ▼
-                                                 ⑤ Random Forest RUL Model
-                                                    (rf_rul_model.pkl)
-                                                            │
-                                                            ▼
-                                                 ⑥ Predicted RUL (Days)
-                                                            │
-                                                            ▼
-                                                 ⑦ Maintenance Decision Engine
-                                                    (maintenance_engine.py)
-                                                            │
-                                                            ▼
-                                                 ⑧ Status + Recommendation + Priority
-                                                            │
-                                                            ▼
-                                                 ⑨ REST API (/api/current & /api/maintenance)
-                                                            │
-                                                            ▼
-                                                 ⑩ React Dashboard Visualizer (4 Views)
+8 Independent Industrial Machines (M-001 ... M-008)
+                       │
+                       ▼
+① Synchronized Telemetry Generation (FleetSimulator.step())
+                       │
+                       ▼
+② 8-Row Feature Batch Matrix [Temp, Vib, Curr]
+                       │
+                       ▼
+③ Preprocessing Pipeline (StandardScaler.transform())
+                       │
+                       ▼
+④ Single Random Forest RUL Model (model.predict(X_8_rows))
+                       │
+                       ▼
+⑤ 8 Predicted RUL Values (Days)
+                       │
+                       ▼
+⑥ Multi-Factor Maintenance Decision Engine (maintenance_engine.py)
+                       │
+                       ▼
+⑦ 8 Machine Statuses + Servicing Recommendations + Priorities
+                       │
+                       ▼
+⑧ FastAPI REST API (/api/current, /api/machines, /api/maintenance, /api/history)
+                       │
+                       ▼
+⑨ React Dashboard Fleet Visualizer (8 Quick Cards + Detail Focus + Comparative Analytics)
 ```
+
+### Synchronized Simulation Step Example:
+```
+Simulation Tick 101
+  ├── Telemetry Generation: 8 independent machine records (M-001 ... M-008)
+  ├── Batch Matrix: 8 rows x 3 features [Temperature, Vibration, Motor_Current]
+  ├── Single Model Call: model_service.predict_rul_batch(feature_batch) -> 8 raw RUL predictions
+  ├── Monotonic Filtering: filter_displayed_rul() applied per machine
+  └── Decision Engine: get_maintenance_recommendation() outputs 8 independent servicing actions
+```
+
 
 ---
 

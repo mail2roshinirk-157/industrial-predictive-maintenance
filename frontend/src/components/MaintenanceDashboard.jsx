@@ -2,8 +2,8 @@ import React, { useRef } from 'react';
 import { Calendar, Wrench, ShieldCheck, Clock } from 'lucide-react';
 import MetricCard from './MetricCard';
 import StatusBadge from './StatusBadge';
-import Plot from './Plot';
-import { calculateAdaptiveYRange } from './LiveChart';
+import Plot from 'react-plotly.js';
+import { calculateAdaptiveYRange } from '../services/chartUtils';
 
 const SingleTrendPlot = ({
   title,
@@ -19,8 +19,8 @@ const SingleTrendPlot = ({
   dtick = null,
   minorDtick = null
 }) => {
-  const actual = Array.isArray(trendData?.actual) ? trendData.actual : [];
-  const predicted = Array.isArray(trendData?.predicted_future) ? trendData.predicted_future : [];
+  const actual = trendData?.actual || [];
+  const predicted = trendData?.predicted_future || [];
   const rangeRef = useRef(null);
 
   const xHist = actual.map((_, i) => i + 1);
@@ -28,7 +28,6 @@ const SingleTrendPlot = ({
   const xFuture = actual.length > 0 ? predicted.map((_, i) => latestDay + i) : [];
 
   const visibleMin = Math.max(1, latestDay - 100);
-
   const visibleMax = latestDay + 20;
 
   const adaptiveRange = metricType === 'health'
@@ -142,12 +141,22 @@ const SingleTrendPlot = ({
 };
 
 
-const MaintenanceDashboard = ({ maintenanceData, historyData }) => {
-  const predictedRul = maintenanceData?.predicted_rul_days ?? '--';
-  const status = maintenanceData?.maintenance_status || 'Healthy';
-  const action = maintenanceData?.recommended_action || 'Continue Normal Operation';
-  const priority = maintenanceData?.inspection_priority || 'Low';
-  const window = maintenanceData?.next_inspection_window || 'Routine inspection within 90–120 days';
+const MaintenanceDashboard = ({ maintenanceData, historyData, selectedMachineId, onSelectMachine }) => {
+  const rawList = maintenanceData?.maintenance_list || [];
+
+  // Enforce Priority conceptual ordering: Critical -> Urgent -> High -> Moderate -> Low
+  const prioOrder = { Critical: 0, Urgent: 1, High: 2, Moderate: 3, Low: 4 };
+  const sortedMaintenanceList = [...rawList].sort(
+    (a, b) => (prioOrder[a.inspection_priority] ?? 5) - (prioOrder[b.inspection_priority] ?? 5)
+  );
+
+  const selectedOrTop = sortedMaintenanceList.find((m) => m.machine_id === selectedMachineId) || sortedMaintenanceList[0] || {};
+
+  const predictedRul = selectedOrTop?.predicted_rul_days ?? maintenanceData?.predicted_rul_days ?? '--';
+  const status = selectedOrTop?.maintenance_status || maintenanceData?.maintenance_status || 'Healthy';
+  const action = selectedOrTop?.recommended_action || maintenanceData?.recommended_action || 'Continue Normal Operation';
+  const priority = selectedOrTop?.inspection_priority || maintenanceData?.inspection_priority || 'Low';
+  const window = selectedOrTop?.next_inspection_window || maintenanceData?.next_inspection_window || 'Routine inspection within 90–120 days';
 
   const healthTrend = historyData?.machine_health_trend?.actual || [];
   let degradationDay = null;
@@ -175,7 +184,91 @@ const MaintenanceDashboard = ({ maintenanceData, historyData }) => {
 
   return (
     <div className="space-y-6">
-      {/* Top Row: Key Maintenance Decision Cards */}
+      {/* Fleet Maintenance Priority Schedule Table */}
+      <div className="industrial-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+              Fleet Servicing & Priority Action Schedule ({sortedMaintenanceList.length} Machines)
+            </h3>
+            <p className="text-[11px] text-gray-500">
+              Determines which machines the maintenance team should service first based on equipment condition & remaining life
+            </p>
+          </div>
+          <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-2.5 py-1 rounded border border-gray-200">
+            Total Fleet: {sortedMaintenanceList.length}
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gray-200 bg-gray-50/80 text-[11px] font-bold text-gray-600 uppercase">
+                <th className="py-2.5 px-3">Rank</th>
+                <th className="py-2.5 px-3">Machine ID</th>
+                <th className="py-2.5 px-3">Machine Name</th>
+                <th className="py-2.5 px-3">Health %</th>
+                <th className="py-2.5 px-3">Predicted RUL</th>
+                <th className="py-2.5 px-3">Status</th>
+                <th className="py-2.5 px-3">Priority</th>
+                <th className="py-2.5 px-3">Recommended Action</th>
+                <th className="py-2.5 px-3">Servicing Window</th>
+                <th className="py-2.5 px-3">Abnormal Indicators</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-xs">
+              {sortedMaintenanceList.map((m, idx) => {
+                const isSelected = m.machine_id === selectedMachineId;
+                const abnormal = m.abnormal_indicators || [];
+                return (
+                  <tr
+                    key={m.machine_id}
+                    onClick={() => onSelectMachine && onSelectMachine(m.machine_id)}
+                    className={`cursor-pointer transition-colors ${
+                      isSelected ? 'bg-blue-50/90 font-semibold' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <td className="py-2.5 px-3 font-bold text-gray-400">#{idx + 1}</td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-blue-600">{m.machine_id}</td>
+                    <td className="py-2.5 px-3 text-gray-800">{m.machine_name}</td>
+                    <td className="py-2.5 px-3 font-semibold">{m.machine_health}%</td>
+                    <td className="py-2.5 px-3 font-bold text-blue-700">{m.predicted_rul_days} Days</td>
+                    <td className="py-2.5 px-3">
+                      <StatusBadge status={m.maintenance_status} />
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getPriorityBadgeClass(m.inspection_priority)}`}>
+                        {m.inspection_priority}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-gray-700 font-medium truncate max-w-[180px]" title={m.recommended_action}>
+                      {m.recommended_action}
+                    </td>
+                    <td className="py-2.5 px-3 text-gray-500 text-[11px] truncate max-w-[160px]" title={m.next_inspection_window}>
+                      {m.next_inspection_window}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      {abnormal.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {abnormal.map((ind, i) => (
+                            <span key={i} className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-800 border border-amber-200" title={ind}>
+                              {ind.split(':')[0]}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-emerald-600 font-medium">Nominal</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Key Maintenance Decision Cards for Selected / Top Machine */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Predicted RUL */}
         <MetricCard
@@ -296,6 +389,4 @@ const MaintenanceDashboard = ({ maintenanceData, historyData }) => {
   );
 };
 
-
 export default MaintenanceDashboard;
-

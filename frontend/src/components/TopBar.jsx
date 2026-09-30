@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, Database, Activity, Clock, ShieldCheck } from 'lucide-react';
+import { Cpu, Database, Clock, ShieldCheck } from 'lucide-react';
 
-const TopBar = ({ backendStatus, statusData }) => {
+const TopBar = ({ backendStatus, statusData, currentData }) => {
   const [timeStr, setTimeStr] = useState(new Date().toLocaleTimeString());
 
   useEffect(() => {
@@ -11,27 +11,29 @@ const TopBar = ({ backendStatus, statusData }) => {
     return () => clearInterval(timer);
   }, []);
 
+  const fleetSize = currentData?.fleet_size || statusData?.fleet_size || 8;
+
   return (
     <header className="bg-slate-900 text-white px-6 py-3 shadow-md flex items-center justify-between text-xs sm:text-sm font-medium border-b border-slate-800">
       <div className="flex items-center space-x-6">
         <div className="flex items-center space-x-2">
-          <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-xs font-bold tracking-wide">MACHINE</span>
-          <span className="font-semibold text-slate-100">{statusData?.machine_id || 'MCH-802X'}</span>
+          <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-xs font-bold tracking-wide">FLEET</span>
+          <span className="font-semibold text-slate-100">{fleetSize} Machines (M-001 ... M-008)</span>
         </div>
         <div className="hidden md:flex items-center space-x-1.5 text-slate-300">
           <Cpu className="w-4 h-4 text-blue-400" />
-          <span>{statusData?.machine_name || 'Turbine Motor Unit A1'}</span>
+          <span>Live Fleet Monitoring</span>
         </div>
         <div className="hidden lg:flex items-center space-x-1.5 text-slate-400">
           <Database className="w-4 h-4 text-slate-400" />
-          <span>{statusData?.data_source || 'Synthetic Sensor Stream'}</span>
+          <span>Industrial Equipment Fleet</span>
         </div>
       </div>
 
       <div className="flex items-center space-x-6">
         <div className="hidden sm:flex items-center space-x-1.5 text-slate-300">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>{statusData?.model || 'Random Forest Regressor'}</span>
+          <span>Predictive Maintenance Engine</span>
         </div>
         <div className="flex items-center space-x-1.5 text-slate-300 font-mono">
           <Clock className="w-4 h-4 text-slate-400" />
@@ -47,3 +49,4 @@ const TopBar = ({ backendStatus, statusData }) => {
 };
 
 export default TopBar;
+

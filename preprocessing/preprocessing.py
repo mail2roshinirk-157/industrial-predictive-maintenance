@@ -4,20 +4,36 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 import os
 
-def load_data(filepath="datasets/sensor_data.csv"):
+def load_data(filepath="datasets/sensor_data_10sensors.csv"):
     if not os.path.exists(filepath):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         alt_path = os.path.join(base_dir, filepath)
         if os.path.exists(alt_path):
             filepath = alt_path
+        else:
+            # Fallback if 10sensors file is not at specified path
+            fallback = os.path.join(base_dir, "datasets", "sensor_data_10sensors.csv")
+            if os.path.exists(fallback):
+                filepath = fallback
     return pd.DataFrame(pd.read_csv(filepath))
 
 def preprocess_data(df, is_training=True):
     # Missing value handling (Forward Fill)
     df.ffill(inplace=True)
     
-    # Feature columns
-    feature_cols = ["Temperature", "Vibration", "Motor_Current"]
+    # Feature columns (10-Sensor Schema)
+    feature_cols = [
+        "Temperature",
+        "Vibration",
+        "Motor_Current",
+        "Pressure",
+        "RPM",
+        "Flow_Rate",
+        "Oil_Temperature",
+        "Power_Consumption",
+        "Torque",
+        "Acoustic_Emission"
+    ]
     
     # Resolve model directory
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

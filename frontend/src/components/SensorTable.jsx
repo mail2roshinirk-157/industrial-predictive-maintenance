@@ -20,32 +20,42 @@ const SensorTable = ({ logs }) => {
         <table className="w-full text-xs text-left text-gray-600">
           <thead className="text-[11px] text-gray-500 uppercase bg-gray-50/70 border-b border-gray-200 font-bold tracking-wider">
             <tr>
-              <th scope="col" className="px-4 py-2.5">Timestamp</th>
-              <th scope="col" className="px-4 py-2.5">Temp (°C)</th>
-              <th scope="col" className="px-4 py-2.5">Vib (mm/s)</th>
-              <th scope="col" className="px-4 py-2.5">Current (A)</th>
-              <th scope="col" className="px-4 py-2.5">Predicted RUL</th>
-              <th scope="col" className="px-4 py-2.5">Health (%)</th>
-              <th scope="col" className="px-4 py-2.5">Status</th>
+              <th scope="col" className="px-3 py-2.5">Timestamp</th>
+              <th scope="col" className="px-3 py-2.5">Temp (°C)</th>
+              <th scope="col" className="px-3 py-2.5">Oil T (°C)</th>
+              <th scope="col" className="px-3 py-2.5">Vib (mm/s)</th>
+              <th scope="col" className="px-3 py-2.5">RPM</th>
+              <th scope="col" className="px-3 py-2.5">Press (bar)</th>
+              <th scope="col" className="px-3 py-2.5">Flow (L/m)</th>
+              <th scope="col" className="px-3 py-2.5">Curr (A)</th>
+              <th scope="col" className="px-3 py-2.5">Pwr (kW)</th>
+              <th scope="col" className="px-3 py-2.5">Pred RUL</th>
+              <th scope="col" className="px-3 py-2.5">Health</th>
+              <th scope="col" className="px-3 py-2.5">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 font-mono">
             {logList.length === 0 ? (
               <tr>
-                <td colSpan="7" className="px-4 py-4 text-center text-gray-400 font-sans">
+                <td colSpan="12" className="px-3 py-4 text-center text-gray-400 font-sans">
                   No log entries available
                 </td>
               </tr>
             ) : (
               logList.map((log, idx) => (
                 <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
-                  <td className="px-4 py-2 text-gray-900 font-sans">{log.timestamp}</td>
-                  <td className="px-4 py-2 font-medium text-gray-800">{log.temperature} °C</td>
-                  <td className="px-4 py-2 font-medium text-gray-800">{log.vibration} mm/s</td>
-                  <td className="px-4 py-2 font-medium text-gray-800">{log.motor_current} A</td>
-                  <td className="px-4 py-2 font-bold text-blue-700 font-sans">{log.predicted_rul} Days</td>
-                  <td className="px-4 py-2 font-semibold text-gray-900">{log.machine_health}%</td>
-                  <td className="px-4 py-2 font-sans">
+                  <td className="px-3 py-2 text-gray-900 font-sans whitespace-nowrap">{log.timestamp}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800">{log.temperature}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800">{log.oil_temperature ?? '--'}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800">{log.vibration}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800">{log.rpm ?? '--'}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800">{log.pressure ?? '--'}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800">{log.flow_rate ?? '--'}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800">{log.motor_current}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800">{log.power_consumption ?? '--'}</td>
+                  <td className="px-3 py-2 font-bold text-blue-700 font-sans">{log.predicted_rul}d</td>
+                  <td className="px-3 py-2 font-semibold text-gray-900">{log.machine_health}%</td>
+                  <td className="px-3 py-2 font-sans">
                     <StatusBadge status={log.status} />
                   </td>
                 </tr>

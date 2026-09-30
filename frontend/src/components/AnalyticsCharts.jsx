@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
-import Plot from './Plot';
-import { calculateAdaptiveYRange } from './LiveChart';
+import Plot from 'react-plotly.js';
+import { calculateAdaptiveYRange } from '../services/chartUtils';
 
 const SingleTrendPlot = ({
   title,
@@ -16,14 +16,13 @@ const SingleTrendPlot = ({
   dtick = null,
   minorDtick = null
 }) => {
-  const actual = Array.isArray(trendData?.actual) ? trendData.actual : [];
-  const predicted = Array.isArray(trendData?.predicted_future) ? trendData.predicted_future : [];
+  const actual = trendData?.actual || [];
+  const predicted = trendData?.predicted_future || [];
   const rangeRef = useRef(null);
 
   const xHist = actual.map((_, i) => i + 1);
   const latestDay = xHist.length > 0 ? xHist[xHist.length - 1] : 1;
   const xFuture = actual.length > 0 ? predicted.map((_, i) => latestDay + i) : [];
-
 
   const visibleMin = Math.max(1, latestDay - 100);
   const visibleMax = latestDay + 20;
@@ -150,74 +149,200 @@ const AnalyticsCharts = ({ historyData }) => {
   }
 
   return (
-    <div className="space-y-4">
-      {/* 2 Column Grid for Temp, Vib, Current, Health */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <SingleTrendPlot
-          title="Temperature Trend"
-          yLabel="°C"
-          trendData={historyData?.temperature_trend}
-          actualColor="#2563EB"
-          degradationDay={degradationDay}
-          minClamp={55}
-          maxClamp={85}
-          minSpan={6}
-          metricType="temperature"
-          dtick={2}
-          minorDtick={0.5}
-        />
-        <SingleTrendPlot
-          title="Vibration RMS Trend"
-          yLabel="mm/s"
-          trendData={historyData?.vibration_trend}
-          actualColor="#2563EB"
-          degradationDay={degradationDay}
-          minClamp={0}
-          maxClamp={6}
-          minSpan={1}
-          metricType="vibration"
-          dtick={0.5}
-          minorDtick={0.1}
-        />
-        <SingleTrendPlot
-          title="Motor Current Trend"
-          yLabel="A"
-          trendData={historyData?.motor_current_trend}
-          actualColor="#2563EB"
-          degradationDay={degradationDay}
-          minClamp={5}
-          maxClamp={25}
-          minSpan={3}
-          metricType="current"
-          dtick={2}
-          minorDtick={0.5}
-        />
-        <SingleTrendPlot
-          title="Machine Health Trend"
-          yLabel="%"
-          trendData={historyData?.machine_health_trend}
-          actualColor="#22C55E"
-          degradationDay={degradationDay}
-          minClamp={0}
-          maxClamp={100}
-          minSpan={100}
-          metricType="health"
-        />
+    <div className="space-y-6">
+      {/* Category 1: Thermal (Operating Temp & Lube Oil Temp) */}
+      <div>
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Thermal Monitoring (2 Signals)</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SingleTrendPlot
+            title="Operating Temperature Trend"
+            yLabel="°C"
+            trendData={historyData?.temperature_trend}
+            actualColor="#EA580C"
+            degradationDay={degradationDay}
+            minClamp={55}
+            maxClamp={85}
+            minSpan={6}
+            metricType="temperature"
+            dtick={2}
+            minorDtick={0.5}
+          />
+          <SingleTrendPlot
+            title="Lube Oil Temperature Trend"
+            yLabel="°C"
+            trendData={historyData?.oil_temperature_trend}
+            actualColor="#C2410C"
+            degradationDay={degradationDay}
+            minClamp={35}
+            maxClamp={75}
+            minSpan={6}
+            metricType="oil_temperature"
+            dtick={5}
+            minorDtick={1}
+          />
+        </div>
       </div>
 
-      {/* Full Width RUL Trend */}
-      <SingleTrendPlot
-        title="Remaining Useful Life (RUL) Trend"
-        yLabel="Days"
-        trendData={historyData?.rul_trend}
-        actualColor="#2563EB"
-        isFullWidth={true}
-        degradationDay={degradationDay}
-        minClamp={0}
-        maxClamp={250}
-        minSpan={80}
-        metricType="rul"
-      />
+      {/* Category 2: Mechanical (Vibration RMS & Shaft Speed RPM) */}
+      <div>
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Mechanical Health (2 Signals)</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SingleTrendPlot
+            title="Vibration RMS Trend"
+            yLabel="mm/s"
+            trendData={historyData?.vibration_trend}
+            actualColor="#2563EB"
+            degradationDay={degradationDay}
+            minClamp={0}
+            maxClamp={6}
+            minSpan={1}
+            metricType="vibration"
+            dtick={0.5}
+            minorDtick={0.1}
+          />
+          <SingleTrendPlot
+            title="Shaft Speed (RPM) Trend"
+            yLabel="RPM"
+            trendData={historyData?.rpm_trend}
+            actualColor="#1D4ED8"
+            degradationDay={degradationDay}
+            minClamp={1500}
+            maxClamp={1900}
+            minSpan={60}
+            metricType="rpm"
+            dtick={50}
+            minorDtick={10}
+          />
+        </div>
+      </div>
+
+      {/* Category 3: Process Fluid Dynamics (Pressure & Flow Rate) */}
+      <div>
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Process & Fluid Dynamics (2 Signals)</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SingleTrendPlot
+            title="Operating Pressure Trend"
+            yLabel="bar"
+            trendData={historyData?.pressure_trend}
+            actualColor="#7C3AED"
+            degradationDay={degradationDay}
+            minClamp={2.0}
+            maxClamp={8.0}
+            minSpan={1.0}
+            metricType="pressure"
+            dtick={1.0}
+            minorDtick={0.2}
+          />
+          <SingleTrendPlot
+            title="Fluid Flow Rate Trend"
+            yLabel="L/min"
+            trendData={historyData?.flow_rate_trend}
+            actualColor="#6D28D9"
+            degradationDay={degradationDay}
+            minClamp={90}
+            maxClamp={180}
+            minSpan={15}
+            metricType="flow_rate"
+            dtick={15}
+            minorDtick={5}
+          />
+        </div>
+      </div>
+
+      {/* Category 4: Electrical Power (Motor Current & Power Demand) */}
+      <div>
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Electrical Power (2 Signals)</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SingleTrendPlot
+            title="Motor Current Trend"
+            yLabel="A"
+            trendData={historyData?.motor_current_trend}
+            actualColor="#D97706"
+            degradationDay={degradationDay}
+            minClamp={5}
+            maxClamp={25}
+            minSpan={3}
+            metricType="current"
+            dtick={2}
+            minorDtick={0.5}
+          />
+          <SingleTrendPlot
+            title="Power Demand Trend"
+            yLabel="kW"
+            trendData={historyData?.power_consumption_trend}
+            actualColor="#B45309"
+            degradationDay={degradationDay}
+            minClamp={10}
+            maxClamp={30}
+            minSpan={4}
+            metricType="power_consumption"
+            dtick={3}
+            minorDtick={1}
+          />
+        </div>
+      </div>
+
+      {/* Category 5: Dynamic Diagnostics (Torque & Acoustic Emission) */}
+      <div>
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Dynamic Diagnostics & Stress (2 Signals)</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SingleTrendPlot
+            title="Torque Trend"
+            yLabel="Nm"
+            trendData={historyData?.torque_trend}
+            actualColor="#0D9488"
+            degradationDay={degradationDay}
+            minClamp={50}
+            maxClamp={150}
+            minSpan={15}
+            metricType="torque"
+            dtick={10}
+            minorDtick={2}
+          />
+          <SingleTrendPlot
+            title="Acoustic Emission Trend"
+            yLabel="dB"
+            trendData={historyData?.acoustic_emission_trend}
+            actualColor="#4F46E5"
+            degradationDay={degradationDay}
+            minClamp={20}
+            maxClamp={80}
+            minSpan={10}
+            metricType="acoustic_emission"
+            dtick={10}
+            minorDtick={2}
+          />
+        </div>
+      </div>
+
+      {/* Machine Health & Estimated RUL Overall System Degradation */}
+      <div>
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">System Degradation & Lifecycle Projections</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SingleTrendPlot
+            title="Machine Health Trend"
+            yLabel="%"
+            trendData={historyData?.machine_health_trend}
+            actualColor="#22C55E"
+            degradationDay={degradationDay}
+            minClamp={0}
+            maxClamp={100}
+            minSpan={100}
+            metricType="health"
+          />
+          <SingleTrendPlot
+            title="Estimated Remaining Useful Life (RUL) Trend"
+            yLabel="Days"
+            trendData={historyData?.rul_trend}
+            actualColor="#0284C7"
+            degradationDay={degradationDay}
+            minClamp={0}
+            maxClamp={250}
+            minSpan={80}
+            metricType="rul"
+          />
+        </div>
+      </div>
     </div>
   );
 };

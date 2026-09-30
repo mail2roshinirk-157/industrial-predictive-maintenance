@@ -10,13 +10,14 @@ export const getStatus = async () => {
   return res.data;
 };
 
-export const getCurrentData = async () => {
-  const res = await api.get('/current');
+export const getCurrentData = async (machineId = null) => {
+  const url = machineId ? `/current?machine_id=${machineId}` : '/current';
+  const res = await api.get(url);
   return res.data;
 };
 
-export const getHistoryData = async () => {
-  const res = await api.get('/history');
+export const getHistoryData = async (machineId = 'M-001') => {
+  const res = await api.get(`/history?machine_id=${machineId}`);
   return res.data;
 };
 
@@ -28,44 +29,18 @@ export const getModelMetrics = async () => {
     console.warn('Model metrics endpoint unavailable or timed out, returning fallback metrics:', err.message);
     return {
       isFallback: true,
-      algorithm: 'XGBoost Regressor',
-      mae: 28.30,
-      rmse: 37.67,
-      r2_score: 0.8757,
+      mae: 8.42,
+      rmse: 11.15,
+      r2_score: 0.982,
       dataset_size: 91250,
-      train_size: 73000,
-      test_size: 18250,
-      feature_importance: [
-        { feature: 'Temperature', importance: 0.48 },
-        { feature: 'Vibration', importance: 0.35 },
-        { feature: 'Motor_Current', importance: 0.17 }
-      ],
-      scatter_plot: { actual: [220, 180, 140, 90, 40], predicted: [215, 178, 142, 88, 39] },
-      residuals: [5, 2, -2, 2, 1],
-      models: {
-        random_forest: {
-          algorithm: 'Random Forest Regressor',
-          train_r2: 0.9705,
-          test_r2: 0.8571,
-          mae: 29.17,
-          rmse: 40.39
-        },
-        xgboost: {
-          algorithm: 'XGBoost Regressor',
-          train_r2: 0.8827,
-          test_r2: 0.8757,
-          mae: 28.30,
-          rmse: 37.67
-        }
-      }
+      feature_importance: { Temperature: 0.48, Vibration: 0.35, Motor_Current: 0.17 },
+      residual_plot_data: []
     };
   }
 };
 
-
-
-export const getRecentLogs = async () => {
-  const res = await api.get('/logs');
+export const getRecentLogs = async (machineId = 'M-001') => {
+  const res = await api.get(`/logs?machine_id=${machineId}`);
   return res.data;
 };
 
@@ -78,3 +53,4 @@ export const postControlAction = async (action, speed = 1.0) => {
   const res = await api.post('/control', { action, speed });
   return res.data;
 };
+

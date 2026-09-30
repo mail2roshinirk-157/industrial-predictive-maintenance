@@ -17,6 +17,7 @@ import {
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedMachineId, setSelectedMachineId] = useState('M-001');
   const [backendStatus, setBackendStatus] = useState(true);
   const [statusData, setStatusData] = useState(null);
   const [currentData, setCurrentData] = useState(null);
@@ -37,7 +38,7 @@ function App() {
         setStatusData(sData);
         setBackendStatus(true);
         consecutiveFailuresRef.current = 0;
-      } catch (err) {
+      } catch {
         // Do not flag disconnected on single initial mount error
       }
 
@@ -52,36 +53,23 @@ function App() {
     fetchInitialData();
   }, []);
 
-  // Fixed 1000ms polling loop for visualization only
+  // Primary 1000ms tick loop for live telemetry (/api/current)
   useEffect(() => {
     let isSubscribed = true;
 
-    const pollData = async () => {
+    const pollLiveCurrent = async () => {
       try {
-        // Fetch telemetry state in parallel for visualization
-        const [curr, hist, lg, maint] = await Promise.all([
-          getCurrentData(),
-          getHistoryData(),
-          getRecentLogs(),
-          getMaintenanceData(),
-        ]);
-
+        const curr = await getCurrentData(selectedMachineId);
         if (isSubscribed) {
           setCurrentData(curr);
-          setHistoryData(hist);
-          setLogs(lg.logs || []);
-          setMaintenanceData(maint);
           setAutoPlay(curr.auto_play);
           setSpeed(curr.simulation_speed);
-
-          // Reset failure counter on successful polling cycle
           consecutiveFailuresRef.current = 0;
           setBackendStatus(true);
         }
-      } catch (err) {
+      } catch {
         if (isSubscribed) {
           consecutiveFailuresRef.current += 1;
-          // Only show "Disconnected" after 3 consecutive failed polling cycles
           if (consecutiveFailuresRef.current >= 3) {
             setBackendStatus(false);
           }
@@ -89,17 +77,45 @@ function App() {
       }
     };
 
-    // Immediate first fetch
-    pollData();
-
-    // Fixed 1-second interval (1000ms) - independent of simulation speed
-    const interval = setInterval(pollData, 1000);
+    pollLiveCurrent();
+    const interval = setInterval(pollLiveCurrent, 1000);
 
     return () => {
       isSubscribed = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [selectedMachineId]);
+
+  // Secondary lower-frequency poll (every 3s) or on machine change for history, logs & maintenance data
+  useEffect(() => {
+    let isSubscribed = true;
+
+    const fetchSecondaryData = async () => {
+      try {
+        const [hist, lg, maint] = await Promise.all([
+          getHistoryData(selectedMachineId),
+          getRecentLogs(selectedMachineId),
+          getMaintenanceData(),
+        ]);
+
+        if (isSubscribed) {
+          setHistoryData(hist);
+          setLogs(lg.logs || []);
+          setMaintenanceData(maint);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch secondary history/maintenance data:', err);
+      }
+    };
+
+    fetchSecondaryData();
+    const interval = setInterval(fetchSecondaryData, 3000);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+    };
+  }, [selectedMachineId]);
 
   // Handle control actions (Start, Pause, Next, Reset, Speed)
   const handleControlAction = async (action, actionSpeed) => {
@@ -119,7 +135,7 @@ function App() {
   return (
     <div className="min-h-screen bg-[#F5F7FA] flex flex-col font-sans text-gray-900 antialiased selection:bg-blue-100">
       {/* Top Bar across entire page */}
-      <TopBar backendStatus={backendStatus} statusData={statusData} />
+      <TopBar backendStatus={backendStatus} statusData={statusData} currentData={currentData} />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar */}
@@ -137,11 +153,32 @@ function App() {
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto p-6 max-w-[1600px] mx-auto w-full">
           {activeTab === 'dashboard' && (
-            <Dashboard currentData={currentData} historyData={historyData} logs={logs} />
+            <Dashboard
+              currentData={currentData}
+              historyData={historyData}
+              logs={logs}
+              selectedMachineId={selectedMachineId}
+              onSelectMachine={setSelectedMachineId}
+              modelData={modelData}
+            />
           )}
-          {activeTab === 'analytics' && <Analytics historyData={historyData} />}
+          {activeTab === 'analytics' && (
+            <Analytics
+              historyData={historyData}
+              selectedMachineId={selectedMachineId}
+              onSelectMachine={setSelectedMachineId}
+            />
+          )}
           {activeTab === 'maintenance' && (
-            <Maintenance maintenanceData={maintenanceData} historyData={historyData} />
+            <Maintenance
+              maintenanceData={maintenanceData}
+              historyData={historyData}
+              selectedMachineId={selectedMachineId}
+              onSelectMachine={(mId) => {
+                setSelectedMachineId(mId);
+                setActiveTab('dashboard');
+              }}
+            />
           )}
           {activeTab === 'evaluation' && <Evaluation modelData={modelData} />}
         </main>
@@ -151,3 +188,4 @@ function App() {
 }
 
 export default App;
+
