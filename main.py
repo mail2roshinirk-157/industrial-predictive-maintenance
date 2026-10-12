@@ -33,12 +33,35 @@ from predict import PredictiveMaintenanceModel, get_future_trend, filter_display
 from maintenance_engine import get_maintenance_recommendation
 from preprocessing import load_data, preprocess_data
 from utils import get_status_color
+from config import (
+    FEATURE_COLUMNS,
+    DATASET_PATH,
+    MODELS_DIR,
+    DATA_SOURCE,
+    MQTT_BROKER,
+    MQTT_PORT,
+    MQTT_TOPIC,
+    MQTT_MACHINE_ID
+)
+from mqtt_service import MQTTTelemetryService
+
+mqtt_telemetry_service = MQTTTelemetryService(
+    broker=MQTT_BROKER,
+    port=MQTT_PORT,
+    topic=MQTT_TOPIC,
+    machine_id=MQTT_MACHINE_ID
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(simulation_clock_loop())
+    if DATA_SOURCE == "mqtt":
+        logger.info(f"Starting optional MQTT Telemetry Service for machine {MQTT_MACHINE_ID} on {MQTT_BROKER}:{MQTT_PORT}...")
+        mqtt_telemetry_service.start(on_reading=process_mqtt_telemetry_reading)
     yield
     task.cancel()
+    if DATA_SOURCE == "mqtt":
+        mqtt_telemetry_service.stop()
 
 app = FastAPI(title="Industrial Predictive Maintenance API - 8-Machine Fleet Engine", lifespan=lifespan)
 
@@ -109,8 +132,8 @@ def generate_next_telemetry_step():
             "Flow_Rate": float(r.get("Flow_Rate", 150.0)),
             "Oil_Temperature": float(r.get("Oil_Temperature", 45.0)),
             "Power_Consumption": float(r.get("Power_Consumption", 15.0)),
-            "Torque": float(r.get("Torque", 81.86)),
-            "Acoustic_Emission": float(r.get("Acoustic_Emission", 40.0)),
+            "Load_Percent": float(r.get("Load_Percent", 70.0)),
+            "Oil_Debris_Count": int(r.get("Oil_Debris_Count", 5)),
         }
         for r in fleet_raw_records
     ]
@@ -131,8 +154,8 @@ def generate_next_telemetry_step():
         flow = float(record.get("Flow_Rate", 150.0))
         oil_temp = float(record.get("Oil_Temperature", 45.0))
         pwr = float(record.get("Power_Consumption", 15.0))
-        torque = float(record.get("Torque", 81.86))
-        acoustic_emission = float(record.get("Acoustic_Emission", 40.0))
+        load_pct = float(record.get("Load_Percent", 70.0))
+        oil_deb = int(record.get("Oil_Debris_Count", 5))
         health = float(record.get("Machine_Health", 100.0))
         active_event = str(record.get("Active_Event", "None"))
         raw_pred_rul = raw_pred_ruls[idx]
@@ -156,9 +179,9 @@ def generate_next_telemetry_step():
         f_dev = max(0.0, (flow_base - flow) / 20.0)
         o_dev = max(0.0, (oil_temp - oil_base) / 20.0)
         w_dev = max(0.0, (pwr - pwr_base) / 10.0)
-        tq_dev = max(0.0, (torque - 81.86) / 20.0)
-        ae_dev = max(0.0, (acoustic_emission - 40.0) / 15.0)
-        sensor_anomaly_score = (0.16 * t_dev + 0.16 * v_dev + 0.12 * c_dev + 0.08 * p_dev + 0.08 * r_dev + 0.08 * f_dev + 0.08 * o_dev + 0.06 * w_dev + 0.09 * tq_dev + 0.09 * ae_dev)
+        lp_dev = max(0.0, (load_pct - 70.0) / 30.0)
+        deb_dev = max(0.0, (oil_deb - 5.0) / 100.0)
+        sensor_anomaly_score = (0.16 * t_dev + 0.16 * v_dev + 0.12 * c_dev + 0.08 * p_dev + 0.08 * r_dev + 0.08 * f_dev + 0.08 * o_dev + 0.06 * w_dev + 0.09 * lp_dev + 0.09 * deb_dev)
         
         prev_rul = sim_state.prev_displayed_rul.get(m_id, None)
         val_float, displayed_rul = filter_displayed_rul(
@@ -184,8 +207,8 @@ def generate_next_telemetry_step():
             flow_rate=flow,
             oil_temperature=oil_temp,
             power_consumption=pwr,
-            torque=torque,
-            acoustic_emission=acoustic_emission,
+            load_percent=load_pct,
+            oil_debris_count=oil_deb,
             temp_base=temp_base,
             vib_base=vib_base,
             curr_base=curr_base,
@@ -240,6 +263,156 @@ def generate_next_telemetry_step():
     return processed_fleet_records
 
 
+def process_mqtt_telemetry_reading(reading: dict):
+    """
+    Ingests a single-machine telemetry reading received via MQTT, runs ML inference,
+    applies temporal filtering, invokes the maintenance decision engine, and updates state.
+    """
+    try:
+        m_id = reading.get("Machine_ID", MQTT_MACHINE_ID)
+        temp = float(reading.get("Temperature", 62.0))
+        vib = float(reading.get("Vibration", 0.20))
+        curr = float(reading.get("Motor_Current", 8.0))
+        press = float(reading.get("Pressure", 5.0))
+        rpm_val = float(reading.get("RPM", 1750.0))
+        flow = float(reading.get("Flow_Rate", 150.0))
+        oil_temp = float(reading.get("Oil_Temperature", 45.0))
+        pwr = float(reading.get("Power_Consumption", 15.0))
+        load_pct = float(reading.get("Load_Percent", 70.0))
+        oil_deb = int(reading.get("Oil_Debris_Count", 5))
+        health = float(reading.get("Machine_Health", 100.0))
+        active_event = str(reading.get("Active_Event", "Normal Operation"))
+
+        # Feature vector for ML prediction
+        feat_dict = {
+            "Temperature": temp,
+            "Vibration": vib,
+            "Motor_Current": curr,
+            "Pressure": press,
+            "RPM": rpm_val,
+            "Flow_Rate": flow,
+            "Oil_Temperature": oil_temp,
+            "Power_Consumption": pwr,
+            "Load_Percent": load_pct,
+            "Oil_Debris_Count": oil_deb,
+        }
+        raw_pred_rul = model_service.predict_rul(feat_dict)
+
+        sim_inst = sim_engine.machines.get(m_id)
+        temp_base = getattr(sim_inst, 'temp_base', 62.0) if sim_inst else 62.0
+        vib_base = getattr(sim_inst, 'vib_base', 0.20) if sim_inst else 0.20
+        curr_base = getattr(sim_inst, 'curr_base', 8.0) if sim_inst else 8.0
+        press_base = getattr(sim_inst, 'press_base', 60.0) if sim_inst else 60.0
+        rpm_base = getattr(sim_inst, 'rpm_base', 1750.0) if sim_inst else 1750.0
+        flow_base = getattr(sim_inst, 'flow_base', 50.0) if sim_inst else 50.0
+        oil_base = getattr(sim_inst, 'oil_base', 50.0) if sim_inst else 50.0
+        pwr_base = getattr(sim_inst, 'power_base', 25.0) if sim_inst else 25.0
+        max_lifespan = getattr(sim_inst, 'max_lifespan_days', 250) if sim_inst else 250
+
+        t_dev = max(0.0, (temp - temp_base) / 15.0)
+        v_dev = max(0.0, (vib - vib_base) / 4.0)
+        c_dev = max(0.0, (curr - curr_base) / 7.2)
+        p_dev = max(0.0, (press - press_base) / 20.0)
+        r_dev = max(0.0, (rpm_base - rpm_val) / 300.0)
+        f_dev = max(0.0, (flow_base - flow) / 20.0)
+        o_dev = max(0.0, (oil_temp - oil_base) / 20.0)
+        w_dev = max(0.0, (pwr - pwr_base) / 10.0)
+        lp_dev = max(0.0, (load_pct - 70.0) / 30.0)
+        deb_dev = max(0.0, (oil_deb - 5.0) / 100.0)
+        sensor_anomaly_score = (0.16 * t_dev + 0.16 * v_dev + 0.12 * c_dev + 0.08 * p_dev + 0.08 * r_dev + 0.08 * f_dev + 0.08 * o_dev + 0.06 * w_dev + 0.09 * lp_dev + 0.09 * deb_dev)
+
+        prev_rul = sim_state.prev_displayed_rul.get(m_id, None)
+        val_float, displayed_rul = filter_displayed_rul(
+            raw_prediction=raw_pred_rul,
+            prev_displayed_rul=prev_rul,
+            health=health
+        )
+        sim_state.prev_displayed_rul[m_id] = val_float
+
+        prev_lvl = sim_state.prev_status_level.get(m_id, 0)
+        maint_info = get_maintenance_recommendation(
+            predicted_rul=displayed_rul,
+            machine_health=health,
+            active_event=active_event,
+            max_lifespan_days=max_lifespan,
+            prev_status_level=prev_lvl,
+            sensor_anomaly_score=sensor_anomaly_score,
+            temperature=temp,
+            vibration=vib,
+            motor_current=curr,
+            pressure=press,
+            rpm=rpm_val,
+            flow_rate=flow,
+            oil_temperature=oil_temp,
+            power_consumption=pwr,
+            load_percent=load_pct,
+            oil_debris_count=oil_deb,
+            temp_base=temp_base,
+            vib_base=vib_base,
+            curr_base=curr_base,
+            press_base=press_base,
+            rpm_base=rpm_base,
+            flow_base=flow_base,
+            oil_temp_base=oil_base,
+            power_base=pwr_base
+        )
+        sim_state.prev_status_level[m_id] = maint_info.get("status_level", 0)
+
+        record = dict(reading)
+        record["Raw_Predicted_RUL"] = raw_pred_rul
+        record["Predicted_RUL"] = displayed_rul
+        record["Machine_Status"] = maint_info["maintenance_status"]
+        record["Recommended_Action"] = maint_info["recommended_action"]
+        record["Inspection_Priority"] = maint_info["inspection_priority"]
+        record["Next_Inspection_Window"] = maint_info["next_inspection_window"]
+        record["Abnormal_Indicators"] = maint_info.get("abnormal_indicators", [])
+
+        if anomaly_detector:
+            try:
+                anom_eval = anomaly_detector.predict_reading(record, machine_id=m_id)
+                record["Anomaly_Label"] = anom_eval.get("anomaly_label", "normal")
+                record["Anomaly_Score"] = anom_eval.get("anomaly_score", 0.0)
+                record["Anomaly_Severity"] = anom_eval.get("anomaly_severity", "Normal")
+                record["Is_Anomaly"] = anom_eval.get("is_anomaly", False)
+                record["Anomaly_Model"] = anom_eval.get("model_type", "per_machine")
+            except Exception:
+                record["Anomaly_Label"] = "normal"
+                record["Anomaly_Score"] = 0.0
+                record["Anomaly_Severity"] = "Normal"
+                record["Is_Anomaly"] = False
+                record["Anomaly_Model"] = "none"
+
+        if m_id not in sim_state.history_by_machine:
+            sim_state.history_by_machine[m_id] = []
+        sim_state.history_by_machine[m_id].append(record)
+        if len(sim_state.history_by_machine[m_id]) > 1000:
+            sim_state.history_by_machine[m_id].pop(0)
+
+        # Update latest fleet tick for this machine
+        if sim_state.fleet_ticks:
+            latest_tick = sim_state.fleet_ticks[-1]
+            updated_machines = []
+            replaced = False
+            for m in latest_tick["machines"]:
+                if m["Machine_ID"] == m_id:
+                    updated_machines.append(record)
+                    replaced = True
+                else:
+                    updated_machines.append(m)
+            if not replaced:
+                updated_machines.append(record)
+            latest_tick["machines"] = updated_machines
+            latest_tick["timestamp"] = record.get("Timestamp", latest_tick["timestamp"])
+        else:
+            sim_state.fleet_ticks.append({
+                "tick": record.get("Tick", 1),
+                "timestamp": record.get("Timestamp", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                "machines": [record]
+            })
+    except Exception as e:
+        logger.error(f"Error processing MQTT reading: {e}", exc_info=True)
+
+
 # Generate initial baseline step on server startup
 if not sim_state.fleet_ticks:
     generate_next_telemetry_step()
@@ -265,11 +438,15 @@ async def simulation_clock_loop():
 @app.get("/api/status")
 def get_status():
     try:
+        mqtt_stats = mqtt_telemetry_service.get_stats() if DATA_SOURCE == "mqtt" else None
         return {
             "status": "online",
             "fleet_size": len(sim_engine.machines),
             "machines": [cfg["machine_id"] for cfg in FleetSimulator.MACHINE_CONFIGS],
-            "data_source": "8-Machine Synchronized Fleet SCADA Simulator",
+            "data_source": f"MQTT Telemetry ({MQTT_MACHINE_ID} on {MQTT_BROKER}:{MQTT_PORT})" if DATA_SOURCE == "mqtt" else "8-Machine Synchronized Fleet SCADA Simulator",
+            "active_data_source": DATA_SOURCE,
+            "mqtt_connected": mqtt_telemetry_service.is_connected if DATA_SOURCE == "mqtt" else False,
+            "mqtt_stats": mqtt_stats,
             "model": "Random Forest Regressor (Batch Inference)",
             "current_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -358,8 +535,8 @@ def get_current(machine_id: str = None):
             "flow_rate": round(float(selected_machine.get("Flow_Rate", 150.0)), 2),
             "oil_temperature": round(float(selected_machine.get("Oil_Temperature", 45.0)), 2),
             "power_consumption": round(float(selected_machine.get("Power_Consumption", 15.0)), 2),
-            "torque": round(float(selected_machine.get("Torque", 81.86)), 2),
-            "acoustic_emission": round(float(selected_machine.get("Acoustic_Emission", 40.0)), 2),
+            "load_percent": round(float(selected_machine.get("Load_Percent", 70.0)), 2),
+            "oil_debris_count": int(selected_machine.get("Oil_Debris_Count", 5)),
             "machine_health": round(float(selected_machine["Machine_Health"]), 1),
             "machine_status": str(selected_machine["Machine_Status"]),
             "actual_rul_days": int(selected_machine["Remaining_Useful_Life_Days"]),
@@ -431,8 +608,8 @@ def get_history(machine_id: str = "M-001"):
                 "flow_rate": [r.get("Flow_Rate", 0.0) for r in hist],
                 "oil_temperature": [r.get("Oil_Temperature", 0.0) for r in hist],
                 "power_consumption": [r.get("Power_Consumption", 0.0) for r in hist],
-                "torque": [r.get("Torque", 0.0) for r in hist],
-                "acoustic_emission": [r.get("Acoustic_Emission", 0.0) for r in hist],
+                "load_percent": [r.get("Load_Percent", 70.0) for r in hist],
+                "oil_debris_count": [r.get("Oil_Debris_Count", 5) for r in hist],
                 "machine_health": [r.get("Machine_Health", 0.0) for r in hist],
                 "predicted_rul": [r.get("Predicted_RUL", 0) for r in hist]
             }
@@ -448,8 +625,8 @@ def get_history(machine_id: str = "M-001"):
             "flow_rate_trend": make_trend_dict("Flow_Rate"),
             "oil_temperature_trend": make_trend_dict("Oil_Temperature"),
             "power_consumption_trend": make_trend_dict("Power_Consumption"),
-            "torque_trend": make_trend_dict("Torque"),
-            "acoustic_emission_trend": make_trend_dict("Acoustic_Emission"),
+            "load_percent_trend": make_trend_dict("Load_Percent"),
+            "oil_debris_count_trend": make_trend_dict("Oil_Debris_Count"),
             "machine_health_trend": make_trend_dict("Machine_Health"),
             "rul_trend": make_trend_dict("Predicted_RUL"),
             "fleet_comparison": fleet_comparison
@@ -486,8 +663,8 @@ def get_maintenance_status():
                 "flow_rate": m.get("Flow_Rate", 0.0),
                 "oil_temperature": m.get("Oil_Temperature", 0.0),
                 "power_consumption": m.get("Power_Consumption", 0.0),
-                "torque": m.get("Torque", 0.0),
-                "acoustic_emission": m.get("Acoustic_Emission", 0.0)
+                "load_percent": m.get("Load_Percent", 70.0),
+                "oil_debris_count": m.get("Oil_Debris_Count", 5)
             })
             
         prio_order = {"Critical": 0, "Urgent": 1, "High": 2, "Moderate": 3, "Low": 4}
@@ -515,8 +692,8 @@ def get_maintenance_status():
             "flow_rate": top_critical.get("flow_rate", 0.0),
             "oil_temperature": top_critical.get("oil_temperature", 0.0),
             "power_consumption": top_critical.get("power_consumption", 0.0),
-            "torque": top_critical.get("torque", 0.0),
-            "acoustic_emission": top_critical.get("acoustic_emission", 0.0)
+            "load_percent": top_critical.get("load_percent", 70.0),
+            "oil_debris_count": top_critical.get("oil_debris_count", 5)
         }
     except Exception as e:
         logger.error(f"Error in GET /api/maintenance: {e}", exc_info=True)
@@ -532,8 +709,8 @@ class PredictRequest(BaseModel):
     flow_rate: float = 150.0
     oil_temperature: float = 45.0
     power_consumption: float = 15.0
-    torque: float = 81.86
-    acoustic_emission: float = 40.0
+    load_percent: float = 70.0
+    oil_debris_count: int = 5
 
 @app.post("/api/predict")
 def predict_rul(req: PredictRequest):
@@ -541,7 +718,7 @@ def predict_rul(req: PredictRequest):
         rul = model_service.predict_rul(
             req.temperature, req.vibration, req.motor_current,
             req.pressure, req.rpm, req.flow_rate, req.oil_temperature, req.power_consumption,
-            req.torque, req.acoustic_emission
+            req.load_percent, req.oil_debris_count
         )
         return {"predicted_rul": rul}
     except Exception as e:
@@ -561,11 +738,7 @@ def get_model_evaluation():
         rmse = np.sqrt(mean_squared_error(y_test, y_pred))
         r2 = r2_score(y_test, y_pred)
         
-        feature_names = [
-            "Temperature", "Vibration", "Motor_Current",
-            "Pressure", "RPM", "Flow_Rate", "Oil_Temperature", "Power_Consumption",
-            "Torque", "Acoustic_Emission"
-        ]
+        feature_names = FEATURE_COLUMNS
         importances = model_service.model.feature_importances_.tolist()
         feature_importance = [
             {"feature": name, "importance": round(float(imp), 4)}
@@ -588,10 +761,24 @@ def get_model_evaluation():
             except Exception as ex:
                 logger.warning(f"Could not load xgboost_experiment_results.json: {ex}")
 
+        # Compute dynamic RF vs Baseline upgrade delta
+        upgrade_delta = None
+        if xgb_exp_data and "baseline_3feature" in xgb_exp_data:
+            base_3f = xgb_exp_data["baseline_3feature"]
+            base_r2 = base_3f.get("r2_score")
+            base_mae = base_3f.get("mae")
+            base_rmse = base_3f.get("rmse")
+            if base_r2 is not None and base_mae is not None and base_rmse is not None:
+                upgrade_delta = {
+                    "r2_score_delta": round(float(r2 - base_r2), 4),
+                    "mae_days_delta": round(float(mae - base_mae), 2),
+                    "rmse_days_delta": round(float(rmse - base_rmse), 2)
+                }
+
         return {
-            "production_model": "Random Forest Regressor (10-Feature)",
+            "production_model": f"Random Forest Regressor ({len(FEATURE_COLUMNS)}-Feature)",
             "algorithm": "Random Forest Regressor",
-            "n_estimators": 100,
+            "n_estimators": getattr(model_service.model, "n_estimators", 100),
             "dataset_size": len(df_eval),
             "train_size": len(X_train_scaled),
             "test_size": len(X_test_scaled),
@@ -604,6 +791,7 @@ def get_model_evaluation():
                 "predicted": predicted_samples
             },
             "residuals": residuals,
+            "upgrade_delta": upgrade_delta,
             "xgboost_experiment": xgb_exp_data
         }
     except Exception as e:
@@ -626,8 +814,8 @@ def get_logs(machine_id: str = "M-001"):
             flow = float(r.get("Flow_Rate", 150.0))
             oil_temp = float(r.get("Oil_Temperature", 45.0))
             power = float(r.get("Power_Consumption", 15.0))
-            torque = float(r.get("Torque", 81.86))
-            acoustic = float(r.get("Acoustic_Emission", 40.0))
+            load_pct = float(r.get("Load_Percent", 70.0))
+            oil_deb = int(r.get("Oil_Debris_Count", 5))
             health = float(r.get("Machine_Health", 100.0))
             pred_rul = int(r.get("Predicted_RUL", 0))
             status, _ = get_status_color(health)
@@ -642,8 +830,8 @@ def get_logs(machine_id: str = "M-001"):
                 "flow_rate": round(flow, 2),
                 "oil_temperature": round(oil_temp, 2),
                 "power_consumption": round(power, 2),
-                "torque": round(torque, 2),
-                "acoustic_emission": round(acoustic, 2),
+                "load_percent": round(load_pct, 2),
+                "oil_debris_count": oil_deb,
                 "predicted_rul": pred_rul,
                 "machine_health": round(health, 1),
                 "status": status,
@@ -683,6 +871,24 @@ def control_simulation(action: ControlAction):
         logger.error(f"Error in POST /api/control: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to process control action: {str(e)}")
 
+# Mount compiled React frontend for single-service production deployments (e.g. Render)
+frontend_dist = os.path.join(base_dir, "frontend", "dist")
+if os.path.exists(frontend_dist):
+    from fastapi.staticfiles import StaticFiles
+    from starlette.responses import FileResponse
+
+    # Mount static assets (/assets, etc.)
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+    # SPA catch-all for root and frontend routes
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_path = os.path.join(frontend_dist, full_path)
+        if full_path and os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
+
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
 
