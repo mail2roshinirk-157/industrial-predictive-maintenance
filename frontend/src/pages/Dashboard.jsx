@@ -1,5 +1,5 @@
 import React from 'react';
-import { Thermometer, Activity, Zap, Calendar, ShieldAlert, Cpu, Server, AlertTriangle, CheckCircle, ShieldCheck, Wind } from 'lucide-react';
+import { Thermometer, Activity, Zap, Calendar, ShieldAlert, Cpu, Server, AlertTriangle, CheckCircle, ShieldCheck, Wind, Gauge } from 'lucide-react';
 import GaugeCard from '../components/GaugeCard';
 import MetricCard from '../components/MetricCard';
 import StatusBadge from '../components/StatusBadge';
@@ -64,6 +64,8 @@ const Dashboard = ({ currentData, historyData, logs, selectedMachineId, onSelect
   const flowVal = parseFloat(selectedMachine?.Flow_Rate ?? selectedMachine?.flow_rate ?? 150.0);
   const currVal = parseFloat(selectedMachine?.Motor_Current ?? selectedMachine?.motor_current ?? 8.0);
   const pwrVal = parseFloat(selectedMachine?.Power_Consumption ?? selectedMachine?.power_consumption ?? 15.0);
+  const loadVal = parseFloat(selectedMachine?.Load_Percent ?? selectedMachine?.load_percent ?? 70.0);
+  const debVal = parseInt(selectedMachine?.Oil_Debris_Count ?? selectedMachine?.oil_debris_count ?? 5);
 
   const getSensorCondition = (type, val) => {
     if (type === 'temp') {
@@ -106,6 +108,16 @@ const Dashboard = ({ currentData, historyData, logs, selectedMachineId, onSelect
       if (val >= 18.0) return { label: 'Elevated', color: 'bg-amber-100 text-amber-800 border-amber-300' };
       return { label: 'Normal', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
     }
+    if (type === 'load') {
+      if (val >= 92.0) return { label: 'Heavy Load', color: 'bg-red-100 text-red-800 border-red-300' };
+      if (val >= 82.0) return { label: 'Elevated', color: 'bg-amber-100 text-amber-800 border-amber-300' };
+      return { label: 'Nominal', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
+    }
+    if (type === 'debris') {
+      if (val >= 150) return { label: 'High Wear', color: 'bg-red-100 text-red-800 border-red-300' };
+      if (val >= 50) return { label: 'Elevated', color: 'bg-amber-100 text-amber-800 border-amber-300' };
+      return { label: 'Clean', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
+    }
     return { label: 'Normal', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
   };
 
@@ -120,7 +132,7 @@ const Dashboard = ({ currentData, historyData, logs, selectedMachineId, onSelect
             </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-wide">Live Fleet Monitoring Summary</h2>
-              <p className="text-xs text-slate-400">Real-time equipment condition monitoring across active facility (8 Multi-Sensor Telemetry Signals)</p>
+              <p className="text-xs text-slate-400">Real-time equipment condition monitoring across active facility (10 Multi-Sensor Telemetry Signals)</p>
             </div>
           </div>
           <div className="flex items-center space-x-2 text-xs font-mono bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
@@ -267,7 +279,7 @@ const Dashboard = ({ currentData, historyData, logs, selectedMachineId, onSelect
               ) : (
                 <div className="flex items-center space-x-2 text-xs text-emerald-700 font-medium bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
                   <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span>All 8 operational telemetry parameters are functioning within normal baseline limits.</span>
+                  <span>All 10 operational telemetry parameters are functioning within normal baseline limits.</span>
                 </div>
               )}
             </div>
@@ -310,16 +322,16 @@ const Dashboard = ({ currentData, historyData, logs, selectedMachineId, onSelect
         />
       </div>
 
-      {/* Row 3: 4 Client-Facing Operational Category Telemetry Cards */}
+      {/* Row 3: 5 Client-Facing Operational Category Telemetry Cards */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-            Operational Telemetry Categories (8 Active Signals)
+            Operational Telemetry Categories (10 Active Signals)
           </h3>
           <span className="text-[11px] text-gray-500 font-medium">Real-time condition indicators</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* 1. THERMAL CATEGORY */}
           <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -439,6 +451,37 @@ const Dashboard = ({ currentData, historyData, logs, selectedMachineId, onSelect
                 </div>
                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getSensorCondition('power', pwrVal).color}`}>
                   {getSensorCondition('power', pwrVal).label}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 5. TRIBOLOGY & LOAD CATEGORY */}
+          <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <Gauge className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Load & Debris</span>
+              </div>
+              <span className="text-[10px] font-semibold text-slate-400">2 Signals</span>
+            </div>
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] text-slate-500 font-medium">Operating Load</div>
+                  <div className="text-base font-bold text-slate-900">{loadVal} <span className="text-xs text-slate-500 font-normal">%</span></div>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getSensorCondition('load', loadVal).color}`}>
+                  {getSensorCondition('load', loadVal).label}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <div>
+                  <div className="text-[11px] text-slate-500 font-medium">Oil Debris Count</div>
+                  <div className="text-base font-bold text-slate-900">{debVal} <span className="text-xs text-slate-500 font-normal">pt/mL</span></div>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getSensorCondition('debris', debVal).color}`}>
+                  {getSensorCondition('debris', debVal).label}
                 </span>
               </div>
             </div>

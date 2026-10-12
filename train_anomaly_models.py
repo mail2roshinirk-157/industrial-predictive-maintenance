@@ -38,8 +38,9 @@ def train_and_save_anomaly_models(contamination=0.05):
     fleet_df = pd.DataFrame(fleet_records)
     print(f"Generated {len(fleet_df)} fleet records across machines: {fleet_df['Machine_ID'].unique().tolist()}")
 
-    # 2. Also incorporate sensor_data_10sensors.csv for broader general operational coverage
-    csv_path = os.path.join(base_dir, "datasets", "sensor_data_10sensors.csv")
+    # 2. Also incorporate fleet_data_v2.csv for broader general operational coverage
+    from config import DATASET_PATH, MODELS_DIR
+    csv_path = DATASET_PATH
     if os.path.exists(csv_path):
         print(f"\n[2/3] Incorporating general 10-sensor dataset ({csv_path})...")
         hist_df = pd.read_csv(csv_path)
@@ -58,7 +59,7 @@ def train_and_save_anomaly_models(contamination=0.05):
     detector.fit_fleet(combined_df, machine_col="Machine_ID")
 
     # Save models
-    models_dir = os.path.join(base_dir, "models")
+    models_dir = MODELS_DIR
     detector.save(models_dir)
     print(f"\nSaved models to {models_dir}:")
     for f in os.listdir(models_dir):

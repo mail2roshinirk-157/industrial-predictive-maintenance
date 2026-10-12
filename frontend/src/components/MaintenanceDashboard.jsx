@@ -19,13 +19,13 @@ const SingleTrendPlot = ({
   dtick = null,
   minorDtick = null
 }) => {
-  const actual = trendData?.actual || [];
-  const predicted = trendData?.predicted_future || [];
+  const actual = Array.isArray(trendData?.actual) ? trendData.actual : [];
+  const predicted = Array.isArray(trendData?.predicted_future) ? trendData.predicted_future : [];
   const rangeRef = useRef(null);
 
   const xHist = actual.map((_, i) => i + 1);
   const latestDay = xHist.length > 0 ? xHist[xHist.length - 1] : 1;
-  const xFuture = actual.length > 0 ? predicted.map((_, i) => latestDay + i) : [];
+  const xFuture = (actual.length > 0 && predicted.length > 0) ? predicted.map((_, i) => latestDay + i) : [];
 
   const visibleMin = Math.max(1, latestDay - 100);
   const visibleMax = latestDay + 20;

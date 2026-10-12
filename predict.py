@@ -2,23 +2,25 @@ import joblib
 import pandas as pd
 import numpy as np
 import os
+import sys
+
+base_dir = os.path.dirname(os.path.abspath(__file__))
+if base_dir not in sys.path:
+    sys.path.append(base_dir)
+
+from config import FEATURE_COLUMNS, MODELS_DIR
 
 class PredictiveMaintenanceModel:
     """
-    Unchanged default behavior: loads models/rf_rul_model.pkl + models/scaler.pkl,
-    exactly as before.
-
-    New, opt-in only: pass model_path explicitly (or set env var RUL_MODEL_PATH)
-    to load a different trained regressor, e.g. models/gb_rul_model.pkl produced
-    by train_gb_model.py. Nothing changes for existing callers that don't opt in.
+    Predictive maintenance inference engine using v2 feature schema (10 features).
+    Loads models/rf_rul_model.pkl + models/scaler.pkl by default.
     """
-    def __init__(self, model_path=None, scaler_path="models/scaler.pkl"):
-        if model_path is None:
-            model_path = os.environ.get("RUL_MODEL_PATH", "models/rf_rul_model.pkl")
-
+    def __init__(self, model_path=None, scaler_path=None):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         
-        def resolve_path(p):
+        def resolve_path(p, default_name):
+            if p is None:
+                p = os.path.join(MODELS_DIR, default_name)
             if os.path.exists(p):
                 return p
             p_from_cur = os.path.join(current_dir, p)
@@ -29,8 +31,8 @@ class PredictiveMaintenanceModel:
                 return p_from_parent
             return p
 
-        resolved_model = resolve_path(model_path)
-        resolved_scaler = resolve_path(scaler_path)
+        resolved_model = resolve_path(model_path, "rf_rul_model.pkl")
+        resolved_scaler = resolve_path(scaler_path, "scaler.pkl")
 
         if os.path.exists(resolved_model) and os.path.exists(resolved_scaler):
             self.model = joblib.load(resolved_model)
@@ -39,23 +41,23 @@ class PredictiveMaintenanceModel:
             self.model = None
             self.scaler = None
 
-    def predict_rul(self, temperature, vibration, current, pressure=5.0, rpm=1750.0, flow_rate=150.0, oil_temperature=45.0, power_consumption=15.0, torque=None, acoustic_emission=None):
-        if torque is None:
-            torque = round(float(9550.0 * power_consumption / max(100.0, rpm)), 2)
-        if acoustic_emission is None:
-            acoustic_emission = round(float(35.0 + 15.0 * np.log10(1.0 + max(0.0, vibration) / 0.18)), 2)
-            
+    def predict_rul(self, temperature=None, vibration=None, current=None, pressure=5.0, rpm=1750.0, flow_rate=150.0, oil_temperature=45.0, power_consumption=15.0, load_percent=70.0, oil_debris_count=5):
+        if isinstance(temperature, dict):
+            d = temperature
+            preds = self.predict_rul_batch([d])
+            return preds[0] if preds else 0
+
         preds = self.predict_rul_batch([{
-            "Temperature": temperature,
-            "Vibration": vibration,
-            "Motor_Current": current,
+            "Temperature": temperature if temperature is not None else 62.0,
+            "Vibration": vibration if vibration is not None else 0.20,
+            "Motor_Current": current if current is not None else 8.0,
             "Pressure": pressure,
             "RPM": rpm,
             "Flow_Rate": flow_rate,
             "Oil_Temperature": oil_temperature,
             "Power_Consumption": power_consumption,
-            "Torque": torque,
-            "Acoustic_Emission": acoustic_emission
+            "Load_Percent": load_percent,
+            "Oil_Debris_Count": oil_debris_count
         }])
         return preds[0] if preds else 0
 
@@ -76,30 +78,28 @@ class PredictiveMaintenanceModel:
         else:
             df = records_or_df.copy()
 
-        # If Torque or Acoustic_Emission are missing in records, derive via physics models
-        if "Torque" not in df.columns:
-            pwr = df["Power_Consumption"] if "Power_Consumption" in df.columns else 15.0
-            r = df["RPM"] if "RPM" in df.columns else 1750.0
-            df["Torque"] = (9550.0 * pwr / np.maximum(100.0, r)).round(2)
+        # If Load_Percent or Oil_Debris_Count are missing in records, apply reasonable physical defaults
+        if "Load_Percent" not in df.columns:
+            df["Load_Percent"] = 70.0
             
-        if "Acoustic_Emission" not in df.columns:
-            vib = df["Vibration"] if "Vibration" in df.columns else 0.20
-            df["Acoustic_Emission"] = (35.0 + 15.0 * np.log10(1.0 + np.maximum(0.0, vib) / 0.18)).round(2)
+        if "Oil_Debris_Count" not in df.columns:
+            if "Machine_Health" in df.columns:
+                p_val = np.clip(1.0 - df["Machine_Health"] / 100.0, 0.0, 1.0)
+                df["Oil_Debris_Count"] = np.random.poisson(5.0 + 400.0 * (p_val ** 3))
+            else:
+                df["Oil_Debris_Count"] = 5
 
-        feature_cols = [
-            "Temperature", "Vibration", "Motor_Current",
-            "Pressure", "RPM", "Flow_Rate", "Oil_Temperature", "Power_Consumption",
-            "Torque", "Acoustic_Emission"
-        ]
+        feature_cols = FEATURE_COLUMNS
         # Fill missing features if any record lacks any feature
         for col in feature_cols:
             if col not in df.columns:
                 df[col] = 0.0
 
-        X_features = df[feature_cols]
+        X_features = df[feature_cols].ffill().bfill().fillna(0.0)
         X_scaled = self.scaler.transform(X_features)
         raw_preds = self.model.predict(X_scaled)
         return [max(0, int(round(p))) for p in raw_preds]
+
 
 def filter_displayed_rul(raw_prediction, prev_displayed_rul=None, health=100.0):
     """
@@ -108,79 +108,111 @@ def filter_displayed_rul(raw_prediction, prev_displayed_rul=None, health=100.0):
     - Smoothly decrements (1–3 days per step based on ML prediction and degradation rate).
     - Preserves gradual day-by-day degradation while tracking raw model predictions closely.
     - Converges smoothly to 0 when machine reaches terminal state (health = 0%).
+    Returns (val_float, displayed_rul_int).
     """
-    raw_val = float(raw_prediction)
-    h_val = float(health)
+    raw_pred = float(raw_prediction)
     
     if prev_displayed_rul is None:
-        val_float = max(0.0, raw_val)
+        val = max(0.0, raw_pred)
+        return val, int(round(val))
+        
+    prev = float(prev_displayed_rul)
+    
+    # Strictly enforce terminal failure state
+    if float(health) <= 0.0:
+        return 0.0, 0
+        
+    # Terminal countdown acceleration near zero
+    if prev <= 3.0:
+        val = max(0.0, prev - 1.0)
+        return val, int(round(val))
+        
+    # Monotonic degradation logic:
+    if raw_pred >= prev:
+        # Physical wear monotonic constraint
+        decay = 1.0 if float(health) > 60.0 else 2.0
+        val = max(0.0, prev - decay)
     else:
-        prev_float = float(prev_displayed_rul)
-        if prev_float <= 0.0:
-            return 0.0, 0
-
-        # Dynamic decay target blending day-advance with ML model prediction
-        time_decay_target = prev_float - 1.0
-        blended = 0.85 * time_decay_target + 0.15 * raw_val
+        # Track accelerated degradation smoothly
+        step_gap = prev - raw_pred
+        if step_gap > 10.0:
+            step_down = 3.0
+        elif step_gap > 3.0:
+            step_down = 2.0
+        else:
+            step_down = 1.0
+        val = max(0.0, prev - step_down)
         
-        # If health is at terminal 0%, accelerate smooth convergence to 0 without instant hard jump
-        if h_val <= 0.0:
-            blended = min(blended, prev_float - 2.0)
-
-        # Enforce smooth non-freezing monotonic upper bound (max decrement 0.51 to 3.0 per step)
-        min_step_decrement = 0.51
-        max_step_decrement = 3.0
-        
-        target_decrement = prev_float - blended
-        clamped_decrement = max(min_step_decrement, min(max_step_decrement, target_decrement))
-        
-        val_float = max(0.0, prev_float - clamped_decrement)
-        
-    int_rul = max(0, int(round(val_float)))
-    return val_float, int_rul
+    return val, int(round(val))
 
 
-
-def get_future_trend(history_values, steps=20):
+def get_future_trend(historical_records, n_future_steps=30, steps=None, **kwargs):
     """
-    Extrapolates the next `steps` values based on polynomial trend fitting.
-    Ensures seamless connection at index 0 to history_values[-1] with growing future uncertainty.
+    Extrapolates physical degradation trends into future steps.
+    Supports both:
+    1. 1D sequence of float values (e.g., history_window for a single sensor).
+    2. List of dict records / DataFrame with multiple columns.
     """
-    if len(history_values) < 2:
-        return [history_values[-1]] * steps if history_values else [0] * steps
+    if steps is not None:
+        n_future_steps = steps
+    elif "n_future_steps" in kwargs:
+        n_future_steps = kwargs["n_future_steps"]
         
-    x = np.arange(len(history_values))
-    y = np.array(history_values)
-    last_val = float(y[-1])
-    
-    # Fit recent trend (degree 2 polynomial if enough points, else linear)
-    window = min(30, len(history_values))
-    deg = 2 if window >= 10 else 1
-    try:
-        coef = np.polyfit(x[-window:], y[-window:], deg)
-        poly1d_fn = np.poly1d(coef)
-    except:
-        coef = np.polyfit(x, y, 1)
-        poly1d_fn = np.poly1d(coef)
-        
-    future_x = np.arange(len(history_values) - 1, len(history_values) - 1 + steps)
-    base_future = poly1d_fn(future_x)
-    
-    # Offset base_future so future_y[0] matches last_val exactly for seamless connection
-    offset = last_val - base_future[0]
-    base_future = base_future + offset
-    
-    # Estimate noise / standard deviation from recent residuals
-    recent_residuals = y[-window:] - poly1d_fn(x[-window:])
-    std_dev = float(np.std(recent_residuals)) if len(recent_residuals) > 1 else 0.5
-    std_dev = max(0.15, min(std_dev, 2.5))
-    
-    # Project into future with growing uncertainty fan
-    np.random.seed(42)  # Fixed seed for consistent rendering across polling intervals
-    future_y = [round(last_val, 2)]
-    for i in range(1, steps):
-        uncertainty_factor = (i / steps) * 0.75
-        noise = float(np.random.normal(0, std_dev * uncertainty_factor))
-        future_y.append(round(float(base_future[i] + noise), 2))
-        
-    return future_y
+    if historical_records is None:
+        return []
+
+    # Case 1: 1D list/array of numerical values (used by main.py make_trend_dict)
+    if isinstance(historical_records, (list, tuple, np.ndarray)):
+        if len(historical_records) == 0:
+            return []
+        if isinstance(historical_records[0], (int, float, np.number)):
+            if len(historical_records) < 2:
+                return [round(float(historical_records[-1]), 2)] * n_future_steps if historical_records else [0.0] * n_future_steps
+
+            x = np.arange(len(historical_records))
+            y = np.array(historical_records, dtype=float)
+            last_val = float(y[-1])
+
+            window = min(30, len(historical_records))
+            deg = 2 if window >= 10 else 1
+            try:
+                coef = np.polyfit(x[-window:], y[-window:], deg)
+                poly1d_fn = np.poly1d(coef)
+            except Exception:
+                coef = np.polyfit(x, y, 1)
+                poly1d_fn = np.poly1d(coef)
+
+            future_x = np.arange(len(historical_records) - 1, len(historical_records) - 1 + n_future_steps)
+            base_future = poly1d_fn(future_x)
+
+            offset = last_val - base_future[0]
+            base_future = base_future + offset
+
+            recent_residuals = y[-window:] - poly1d_fn(x[-window:])
+            std_dev = float(np.std(recent_residuals)) if len(recent_residuals) > 1 else 0.5
+            std_dev = max(0.15, min(std_dev, 2.5))
+
+            np.random.seed(42)
+            future_y = [round(last_val, 2)]
+            for i in range(1, n_future_steps):
+                uncertainty_factor = (i / n_future_steps) * 0.75
+                noise = float(np.random.normal(0, std_dev * uncertainty_factor))
+                future_y.append(round(float(base_future[i] + noise), 2))
+
+            return future_y
+
+    # Case 2: List of record dicts or DataFrame
+    df_hist = pd.DataFrame(historical_records)
+    n_hist = len(df_hist)
+
+    if n_hist < 2:
+        return {}
+
+    future_trends = {}
+
+    for col in FEATURE_COLUMNS:
+        if col in df_hist.columns:
+            vals = df_hist[col].tolist()
+            future_trends[col] = get_future_trend(vals, n_future_steps=n_future_steps)
+
+    return future_trends

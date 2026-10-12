@@ -26,16 +26,8 @@ export const getModelMetrics = async () => {
     const res = await api.get('/model', { timeout: 15000 });
     return res.data;
   } catch (err) {
-    console.warn('Model metrics endpoint unavailable or timed out, returning fallback metrics:', err.message);
-    return {
-      isFallback: true,
-      mae: 8.42,
-      rmse: 11.15,
-      r2_score: 0.982,
-      dataset_size: 91250,
-      feature_importance: { Temperature: 0.48, Vibration: 0.35, Motor_Current: 0.17 },
-      residual_plot_data: []
-    };
+    console.warn('Model metrics endpoint unavailable or timed out:', err.message);
+    return null;
   }
 };
 

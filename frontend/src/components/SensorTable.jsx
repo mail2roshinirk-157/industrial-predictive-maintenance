@@ -29,6 +29,8 @@ const SensorTable = ({ logs }) => {
               <th scope="col" className="px-3 py-2.5">Flow (L/m)</th>
               <th scope="col" className="px-3 py-2.5">Curr (A)</th>
               <th scope="col" className="px-3 py-2.5">Pwr (kW)</th>
+              <th scope="col" className="px-3 py-2.5">Load (%)</th>
+              <th scope="col" className="px-3 py-2.5">Debris</th>
               <th scope="col" className="px-3 py-2.5">Pred RUL</th>
               <th scope="col" className="px-3 py-2.5">Health</th>
               <th scope="col" className="px-3 py-2.5">Status</th>
@@ -37,7 +39,7 @@ const SensorTable = ({ logs }) => {
           <tbody className="divide-y divide-gray-100 font-mono">
             {logList.length === 0 ? (
               <tr>
-                <td colSpan="12" className="px-3 py-4 text-center text-gray-400 font-sans">
+                <td colSpan="14" className="px-3 py-4 text-center text-gray-400 font-sans">
                   No log entries available
                 </td>
               </tr>
@@ -53,6 +55,8 @@ const SensorTable = ({ logs }) => {
                   <td className="px-3 py-2 font-medium text-gray-800">{log.flow_rate ?? '--'}</td>
                   <td className="px-3 py-2 font-medium text-gray-800">{log.motor_current}</td>
                   <td className="px-3 py-2 font-medium text-gray-800">{log.power_consumption ?? '--'}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800">{log.load_percent ?? '--'}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800">{log.oil_debris_count ?? '--'}</td>
                   <td className="px-3 py-2 font-bold text-blue-700 font-sans">{log.predicted_rul}d</td>
                   <td className="px-3 py-2 font-semibold text-gray-900">{log.machine_health}%</td>
                   <td className="px-3 py-2 font-sans">

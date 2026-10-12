@@ -73,6 +73,7 @@ class RealTimeMachineSimulator:
         self.oil_temp_drift = 0.0
         self.power_drift = 0.0
         self.noise_drift = 0.0
+        self.load_percent = 70.0 + np.random.normal(0, 4.0)
         
         # Base noise standard deviations during Healthy phase
         self.sigma_temp_base = random.uniform(0.22, 0.32)
@@ -196,6 +197,18 @@ class RealTimeMachineSimulator:
         raw_power = (raw_curr * 1.85) + (raw_temp - self.temp_base) * 0.05 + np.random.normal(0, max(0.05, sigma_pw))
         raw_noise = noise_mean + noise_vib_coupling + np.random.normal(0, max(0.2, sigma_n)) + (4.5 * spike_factor)
         
+        # Operating Condition: AR(1) Load_Percent (independent of wear/RUL)
+        self.load_percent = 70.0 + 0.92 * (self.load_percent - 70.0) + np.random.normal(0, 3.5)
+        load_val = float(np.clip(self.load_percent, 40.0, 100.0))
+        load_delta = load_val - 70.0
+        
+        # Load coupling into Motor_Current, Vibration, and Power_Consumption
+        k1 = 0.08
+        k2 = 0.033
+        raw_curr += k1 * load_delta
+        raw_vib += k2 * load_delta
+        raw_power += 1.85 * k1 * load_delta
+
         temp_measured = max(20.0, raw_temp)
         vib_measured = max(0.05, raw_vib)
         curr_measured = max(4.0, raw_curr)
@@ -234,9 +247,10 @@ class RealTimeMachineSimulator:
         
         timestamp_str = (self.start_time + datetime.timedelta(days=self.current_step)).strftime("%Y-%m-%d %H:%M:%S")
         
-        # Derived physical sensors: Torque (Nm) & Acoustic Emission (dB)
-        torque_val = round(float((9550.0 * power_measured / max(100.0, rpm_measured)) + np.random.normal(0, 0.4)), 2)
-        ae_val = round(float(35.0 + 15.0 * np.log10(1.0 + max(0.0, vib_measured) / 0.18) + np.random.normal(0, 0.5)), 2)
+        # Derived physical sensors: Oil_Debris_Count (particles/mL) derived from wear p
+        p_val = max(0.0, min(1.0, 1.0 - (self.health / 100.0)))
+        lam = 5.0 + 400.0 * (p_val ** 3)
+        oil_debris_val = int(np.random.poisson(lam))
         
         return {
             "Timestamp": timestamp_str,
@@ -248,8 +262,8 @@ class RealTimeMachineSimulator:
             "Flow_Rate": round(float(flow_measured), 2),
             "Oil_Temperature": round(float(oil_temp_measured), 2),
             "Power_Consumption": round(float(power_measured), 2),
-            "Torque": torque_val,
-            "Acoustic_Emission": ae_val,
+            "Load_Percent": round(float(load_val), 2),
+            "Oil_Debris_Count": int(oil_debris_val),
             "Acoustic_Noise": round(float(noise_measured), 2),
             "Machine_Health": round(float(self.health), 1),
             "Machine_Status": self._evaluate_stage(),

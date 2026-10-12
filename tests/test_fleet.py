@@ -67,8 +67,8 @@ class TestBatchInference(unittest.TestCase):
                 "Flow_Rate": 150.0 - i,
                 "Oil_Temperature": 45.0 + i,
                 "Power_Consumption": 15.0 + (i * 0.5),
-                "Torque": 81.86 + i,
-                "Acoustic_Emission": 40.0 + (i * 0.2)
+                "Load_Percent": 70.0 + i,
+                "Oil_Debris_Count": 5 + i
             }
             for i in range(8)
         ]

@@ -1,52 +1,44 @@
+import os
+import sys
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import joblib
-import os
 
-def load_data(filepath="datasets/sensor_data_10sensors.csv"):
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if base_dir not in sys.path:
+    sys.path.append(base_dir)
+
+from config import DATASET_PATH, FEATURE_COLUMNS, TARGET_COLUMN, MODELS_DIR
+
+def load_data(filepath=None):
+    if filepath is None:
+        filepath = DATASET_PATH
     if not os.path.exists(filepath):
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         alt_path = os.path.join(base_dir, filepath)
         if os.path.exists(alt_path):
             filepath = alt_path
         else:
-            # Fallback if 10sensors file is not at specified path
-            fallback = os.path.join(base_dir, "datasets", "sensor_data_10sensors.csv")
-            if os.path.exists(fallback):
-                filepath = fallback
+            filepath = DATASET_PATH
     return pd.DataFrame(pd.read_csv(filepath))
 
-def preprocess_data(df, is_training=True):
+def preprocess_data(df, is_training=True, feature_cols=None):
     # Missing value handling (Forward Fill)
     df.ffill(inplace=True)
     
-    # Feature columns (10-Sensor Schema)
-    feature_cols = [
-        "Temperature",
-        "Vibration",
-        "Motor_Current",
-        "Pressure",
-        "RPM",
-        "Flow_Rate",
-        "Oil_Temperature",
-        "Power_Consumption",
-        "Torque",
-        "Acoustic_Emission"
-    ]
+    if feature_cols is None:
+        feature_cols = FEATURE_COLUMNS
     
     # Resolve model directory
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    models_dir = os.path.join(base_dir, "models")
-    os.makedirs(models_dir, exist_ok=True)
-    scaler_path = os.path.join(models_dir, "scaler.pkl")
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    scaler_path = os.path.join(MODELS_DIR, "scaler.pkl")
     
     if is_training:
-        target_col = "Remaining_Useful_Life_Days"
+        target_col = TARGET_COLUMN
         X = df[feature_cols]
         y = df[target_col]
         
-        # Train/Test Split
+        # Train/Test Split (identical row-based 80/20 split)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         
         # Feature Scaling
@@ -54,8 +46,9 @@ def preprocess_data(df, is_training=True):
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
-        # Save the scaler for inference
-        joblib.dump(scaler, scaler_path)
+        # Save the scaler for inference if using default 10 features
+        if feature_cols == FEATURE_COLUMNS:
+            joblib.dump(scaler, scaler_path)
         
         return X_train_scaled, X_test_scaled, y_train, y_test
     else:
@@ -64,4 +57,3 @@ def preprocess_data(df, is_training=True):
         X = df[feature_cols]
         X_scaled = scaler.transform(X)
         return X_scaled
-

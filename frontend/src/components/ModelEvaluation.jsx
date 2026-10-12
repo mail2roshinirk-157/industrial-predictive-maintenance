@@ -12,12 +12,12 @@ const ModelEvaluation = ({ modelData }) => {
   }
 
   const {
-    dataset_size = 91250,
-    train_size = 73000,
-    test_size = 18250,
-    mae = 29.17,
-    rmse = 40.39,
-    r2_score = 0.8571,
+    dataset_size,
+    train_size,
+    test_size,
+    mae,
+    rmse,
+    r2_score,
     feature_importance = [],
     scatter_plot = { actual: [], predicted: [] },
     residuals = [],
@@ -34,17 +34,25 @@ const ModelEvaluation = ({ modelData }) => {
   const xgbMae = xgbExp?.xgboost?.mae;
   const xgbRmse = xgbExp?.xgboost?.rmse;
 
-  const deltaR2 = xgbExp?.deltas?.r2_score_delta;
-
-  const lifecycleRows = xgbExp?.lifecycle_evaluation || [
-    { region: 'Early Degradation (Health >= 80%)', random_forest: { mae: 39.57 }, xgboost: { mae: 38.11 }, mae_delta: -1.46 },
-    { region: 'Mid Degradation (60% <= Health < 80%)', random_forest: { mae: 15.00 }, xgboost: { mae: 15.00 }, mae_delta: 0.00 },
-    { region: 'Late Degradation (40% <= Health < 60%)', random_forest: { mae: 17.27 }, xgboost: { mae: 17.26 }, mae_delta: -0.01 },
-    { region: 'Near Failure (Health < 40%)', random_forest: { mae: 18.98 }, xgboost: { mae: 19.05 }, mae_delta: 0.07 }
-  ];
-
-  const featureCount = xgbExp?.feature_count || (feature_importance.length > 0 ? feature_importance.length : 10);
   const baseline3f = xgbExp?.rf_3feature_baseline || xgbExp?.baseline_3feature;
+  const baseR2 = baseline3f?.r2_score;
+  const baseMae = baseline3f?.mae;
+  const baseRmse = baseline3f?.rmse;
+
+  // Dynamically compute Upgrade Delta: (10-feature Random Forest) minus (3-feature Baseline)
+  const upgradeDeltaR2 = (rfR2 != null && baseR2 != null) ? Number((rfR2 - baseR2).toFixed(4)) : (modelData?.upgrade_delta?.r2_score_delta ?? null);
+  const upgradeDeltaMae = (rfMae != null && baseMae != null) ? Number((rfMae - baseMae).toFixed(2)) : (modelData?.upgrade_delta?.mae_days_delta ?? null);
+  const upgradeDeltaRmse = (rfRmse != null && baseRmse != null) ? Number((rfRmse - baseRmse).toFixed(2)) : (modelData?.upgrade_delta?.rmse_days_delta ?? null);
+
+  const formatDelta = (val, decimals, unit = '') => {
+    if (val == null || isNaN(val)) return '—';
+    const sign = val >= 0 ? '+' : '';
+    return `${sign}${val.toFixed(decimals)}${unit}`;
+  };
+
+  const lifecycleRows = xgbExp?.lifecycle_evaluation || [];
+
+  const featureCount = xgbExp?.feature_count || (feature_importance.length > 0 ? feature_importance.length : (xgbExp?.features?.length || 10));
 
   return (
     <div className="space-y-6">
@@ -57,7 +65,9 @@ const ModelEvaluation = ({ modelData }) => {
             </div>
             <div>
               <h2 className="text-base font-bold text-gray-900">Random Forest Production Model & XGBoost Benchmark Evaluation</h2>
-              <p className="text-xs text-gray-500">Holdout validation metrics on 18,250 test samples (80/20 train/test split)</p>
+              <p className="text-xs text-gray-500">
+                Holdout validation metrics on {test_size ? test_size.toLocaleString() : '—'} test samples ({train_size && test_size ? `${Math.round(train_size / (train_size + test_size) * 100)}/${Math.round(test_size / (train_size + test_size) * 100)}` : '—'} train/test split)
+              </p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -80,27 +90,27 @@ const ModelEvaluation = ({ modelData }) => {
 
           <div className="bg-gray-50 p-3.5 rounded-lg border border-gray-200">
             <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Dataset Size</span>
-            <span className="text-base font-bold text-gray-900 mt-1 block">{dataset_size.toLocaleString()} rows</span>
+            <span className="text-base font-bold text-gray-900 mt-1 block">{dataset_size ? `${dataset_size.toLocaleString()} rows` : '—'}</span>
           </div>
 
           <div className="bg-gray-50 p-3.5 rounded-lg border border-gray-200">
             <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Train/Test Split</span>
-            <span className="text-base font-bold text-gray-900 mt-1 block">{train_size.toLocaleString()} / {test_size.toLocaleString()}</span>
+            <span className="text-base font-bold text-gray-900 mt-1 block">{(train_size && test_size) ? `${train_size.toLocaleString()} / ${test_size.toLocaleString()}` : '—'}</span>
           </div>
 
           <div className="bg-blue-50/60 p-3.5 rounded-lg border border-blue-200">
             <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider block">Production MAE</span>
-            <span className="text-xl font-bold text-blue-900 mt-1 block">{rfMae} <span className="text-xs font-normal text-blue-600">Days</span></span>
+            <span className="text-xl font-bold text-blue-900 mt-1 block">{rfMae != null ? rfMae : '—'} <span className="text-xs font-normal text-blue-600">Days</span></span>
           </div>
 
           <div className="bg-blue-50/60 p-3.5 rounded-lg border border-blue-200">
             <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider block">Production RMSE</span>
-            <span className="text-xl font-bold text-blue-900 mt-1 block">{rfRmse} <span className="text-xs font-normal text-blue-600">Days</span></span>
+            <span className="text-xl font-bold text-blue-900 mt-1 block">{rfRmse != null ? rfRmse : '—'} <span className="text-xs font-normal text-blue-600">Days</span></span>
           </div>
 
           <div className="bg-emerald-50/60 p-3.5 rounded-lg border border-emerald-200">
             <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">Production R² Score</span>
-            <span className="text-xl font-bold text-emerald-900 mt-1 block">{rfR2}</span>
+            <span className="text-xl font-bold text-emerald-900 mt-1 block">{rfR2 != null ? rfR2 : '—'}</span>
           </div>
         </div>
       </div>
@@ -116,7 +126,7 @@ const ModelEvaluation = ({ modelData }) => {
             </h3>
           </div>
           <p className="text-xs text-gray-500 mb-3">
-            Random Forest is the active production model for live SCADA telemetry and 8-machine fleet batch inference.
+            Random Forest is the active production model for live SCADA telemetry and fleet batch inference.
           </p>
 
           <div className="overflow-x-auto">
@@ -142,13 +152,13 @@ const ModelEvaluation = ({ modelData }) => {
                     </span>
                   </td>
                   <td className="py-2.5 px-3 font-mono font-bold text-slate-700">
-                    {baseline3f?.r2_score ?? '0.8548'}
+                    {baseR2 != null ? baseR2 : '—'}
                   </td>
                   <td className="py-2.5 px-3 font-mono font-bold text-slate-700">
-                    {baseline3f?.mae ?? '29.39'}d
+                    {baseMae != null ? `${baseMae}d` : '—'}
                   </td>
                   <td className="py-2.5 px-3 font-mono text-slate-600">
-                    {baseline3f?.rmse ?? '40.52'}d
+                    {baseRmse != null ? `${baseRmse}d` : '—'}
                   </td>
                 </tr>
                 {/* 10-Feature RF Production */}
@@ -160,9 +170,9 @@ const ModelEvaluation = ({ modelData }) => {
                       Active Production
                     </span>
                   </td>
-                  <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">{rfR2 ?? '0.8969'}</td>
-                  <td className="py-2.5 px-3 font-mono font-bold text-blue-700">{rfMae != null ? `${rfMae}d` : '24.46d'}</td>
-                  <td className="py-2.5 px-3 font-mono text-gray-700">{rfRmse != null ? `${rfRmse}d` : '34.15d'}</td>
+                  <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">{rfR2 != null ? rfR2 : '—'}</td>
+                  <td className="py-2.5 px-3 font-mono font-bold text-blue-700">{rfMae != null ? `${rfMae}d` : '—'}</td>
+                  <td className="py-2.5 px-3 font-mono text-gray-700">{rfRmse != null ? `${rfRmse}d` : '—'}</td>
                 </tr>
                 {/* 10-Feature XGBoost Experiment */}
                 <tr>
@@ -173,17 +183,17 @@ const ModelEvaluation = ({ modelData }) => {
                       Offline Benchmark
                     </span>
                   </td>
-                  <td className="py-2.5 px-3 font-mono font-bold text-purple-700">{xgbR2 ?? '0.8917'}</td>
-                  <td className="py-2.5 px-3 font-mono font-bold text-purple-700">{xgbMae != null ? `${xgbMae}d` : '25.71d'}</td>
-                  <td className="py-2.5 px-3 font-mono text-gray-700">{xgbRmse != null ? `${xgbRmse}d` : '35.00d'}</td>
+                  <td className="py-2.5 px-3 font-mono font-bold text-purple-700">{xgbR2 != null ? xgbR2 : '—'}</td>
+                  <td className="py-2.5 px-3 font-mono font-bold text-purple-700">{xgbMae != null ? `${xgbMae}d` : '—'}</td>
+                  <td className="py-2.5 px-3 font-mono text-gray-700">{xgbRmse != null ? `${xgbRmse}d` : '—'}</td>
                 </tr>
-                {deltaR2 != null && (
+                {upgradeDeltaR2 != null && (
                   <tr className="bg-gray-50 text-[11px] font-semibold text-gray-600">
                     <td className="py-2 px-3 font-bold text-slate-700" colSpan={2}>Upgrade Delta ({featureCount}-Feat RF vs 3-Feat Base)</td>
                     <td className="py-2 px-3 text-gray-400">—</td>
-                    <td className="py-2 px-3 font-mono text-emerald-600">+{deltaR2}</td>
-                    <td className="py-2 px-3 font-mono text-blue-600">{xgbExp?.deltas?.mae_delta != null ? `${xgbExp.deltas.mae_delta}d` : '-4.93d'}</td>
-                    <td className="py-2 px-3 font-mono text-blue-600">{xgbExp?.deltas?.rmse_delta != null ? `${xgbExp.deltas.rmse_delta}d` : '-6.37d'}</td>
+                    <td className="py-2 px-3 font-mono text-emerald-600">{formatDelta(upgradeDeltaR2, 4)}</td>
+                    <td className="py-2 px-3 font-mono text-blue-600">{formatDelta(upgradeDeltaMae, 2, 'd')}</td>
+                    <td className="py-2 px-3 font-mono text-blue-600">{formatDelta(upgradeDeltaRmse, 2, 'd')}</td>
                   </tr>
                 )}
               </tbody>

@@ -15,8 +15,8 @@ def get_maintenance_recommendation(
     flow_rate=None,
     oil_temperature=None,
     power_consumption=None,
-    torque=None,
-    acoustic_emission=None,
+    load_percent=None,
+    oil_debris_count=None,
     temp_base=62.0,
     vib_base=0.20,
     curr_base=8.0,
@@ -25,8 +25,8 @@ def get_maintenance_recommendation(
     flow_base=150.0,
     oil_temp_base=45.0,
     power_base=15.0,
-    torque_base=81.86,
-    acoustic_base=40.0,
+    load_base=70.0,
+    oil_debris_base=5.0,
     **kwargs
 ):
     """
@@ -157,19 +157,19 @@ def get_maintenance_recommendation(
         if pw_diff >= 5.0 or pw_val >= 22.0:
             abnormal_indicators.append(f"Power Demand Elevated: {pw_val:.1f} kW (+{pw_diff:.1f} kW vs baseline)")
 
-    if torque is not None:
-        tq_val = float(torque)
-        tq_b = float(torque_base)
-        tq_diff = tq_val - tq_b
-        if tq_diff >= 15.0 or tq_val >= 105.0:
-            abnormal_indicators.append(f"High Shaft Torque: {tq_val:.1f} Nm (+{tq_diff:.1f} Nm vs baseline)")
+    if load_percent is not None:
+        lp_val = float(load_percent)
+        lp_b = float(load_base)
+        lp_diff = lp_val - lp_b
+        if lp_diff >= 20.0 or lp_val >= 92.0:
+            abnormal_indicators.append(f"Operating Load High: {lp_val:.1f}% (+{lp_diff:.1f}% vs baseline)")
 
-    if acoustic_emission is not None:
-        ae_val = float(acoustic_emission)
-        ae_b = float(acoustic_base)
-        ae_diff = ae_val - ae_b
-        if ae_diff >= 8.0 or ae_val >= 52.0:
-            abnormal_indicators.append(f"High Acoustic Emission: {ae_val:.1f} dB (+{ae_diff:.1f} dB vs baseline)")
+    if oil_debris_count is not None:
+        deb_val = float(oil_debris_count)
+        if deb_val >= 150.0:
+            abnormal_indicators.append(f"Severe Oil Metallic Debris: {deb_val:.0f} particles/mL (High Wear)")
+        elif deb_val >= 50.0:
+            abnormal_indicators.append(f"Elevated Oil Debris: {deb_val:.0f} particles/mL")
 
     if active_event not in ["None", "", None]:
         abnormal_indicators.append(f"Fault Signal: {active_event}")

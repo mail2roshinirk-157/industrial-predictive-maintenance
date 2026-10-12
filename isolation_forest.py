@@ -60,38 +60,15 @@ import pandas as pd
 from typing import Dict, List, Optional, Tuple, Union
 from sklearn.ensemble import IsolationForest
 
-# Canonical 10-Sensor Feature Schema
-SENSOR_FEATURES = [
-    "Temperature",
-    "Vibration",
-    "Motor_Current",
-    "Pressure",
-    "RPM",
-    "Flow_Rate",
-    "Oil_Temperature",
-    "Power_Consumption",
-    "Torque",
-    "Acoustic_Emission"
-]
+import sys
+base_dir = os.path.dirname(os.path.abspath(__file__))
+if base_dir not in sys.path:
+    sys.path.append(base_dir)
 
-# Explicitly excluded non-feature columns (timestamps, IDs, and supervised labels)
-EXCLUDED_COLUMNS = [
-    "Timestamp",
-    "Machine_ID",
-    "Machine_Name",
-    "Day",
-    "Tick",
-    "Active_Event",
-    "Remaining_Useful_Life_Days",
-    "Machine_Health",
-    "Machine_Status",
-    "Predicted_RUL",
-    "Raw_Predicted_RUL",
-    "Recommended_Action",
-    "Inspection_Priority",
-    "Next_Inspection_Window",
-    "Abnormal_Indicators"
-]
+from config import FEATURE_COLUMNS, EXCLUDED_COLUMNS, MODELS_DIR
+
+# Canonical 10-Sensor Feature Schema (v2)
+SENSOR_FEATURES = FEATURE_COLUMNS
 
 
 def extract_sensor_features(df_or_records: Union[pd.DataFrame, List[dict], dict]) -> pd.DataFrame:
@@ -108,14 +85,15 @@ def extract_sensor_features(df_or_records: Union[pd.DataFrame, List[dict], dict]
         df = df_or_records.copy()
 
     # Derived physics attributes if missing
-    if "Torque" not in df.columns:
-        pwr = df["Power_Consumption"] if "Power_Consumption" in df.columns else 15.0
-        rpm = df["RPM"] if "RPM" in df.columns else 1750.0
-        df["Torque"] = (9550.0 * pwr / np.maximum(100.0, rpm)).round(2)
+    if "Load_Percent" not in df.columns:
+        df["Load_Percent"] = 70.0
 
-    if "Acoustic_Emission" not in df.columns:
-        vib = df["Vibration"] if "Vibration" in df.columns else 0.20
-        df["Acoustic_Emission"] = (35.0 + 15.0 * np.log10(1.0 + np.maximum(0.0, vib) / 0.18)).round(2)
+    if "Oil_Debris_Count" not in df.columns:
+        if "Machine_Health" in df.columns:
+            p_val = np.clip(1.0 - df["Machine_Health"] / 100.0, 0.0, 1.0)
+            df["Oil_Debris_Count"] = np.random.poisson(5.0 + 400.0 * (p_val ** 3))
+        else:
+            df["Oil_Debris_Count"] = 5
 
     # Ensure all 10 features exist with forward fill and fallback
     for feat in SENSOR_FEATURES:

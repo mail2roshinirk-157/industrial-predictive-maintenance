@@ -16,13 +16,13 @@ const SingleTrendPlot = ({
   dtick = null,
   minorDtick = null
 }) => {
-  const actual = trendData?.actual || [];
-  const predicted = trendData?.predicted_future || [];
+  const actual = Array.isArray(trendData?.actual) ? trendData.actual : [];
+  const predicted = Array.isArray(trendData?.predicted_future) ? trendData.predicted_future : [];
   const rangeRef = useRef(null);
 
   const xHist = actual.map((_, i) => i + 1);
   const latestDay = xHist.length > 0 ? xHist[xHist.length - 1] : 1;
-  const xFuture = actual.length > 0 ? predicted.map((_, i) => latestDay + i) : [];
+  const xFuture = (actual.length > 0 && predicted.length > 0) ? predicted.map((_, i) => latestDay + i) : [];
 
   const visibleMin = Math.max(1, latestDay - 100);
   const visibleMax = latestDay + 20;
@@ -282,35 +282,35 @@ const AnalyticsCharts = ({ historyData }) => {
         </div>
       </div>
 
-      {/* Category 5: Dynamic Diagnostics (Torque & Acoustic Emission) */}
+      {/* Category 5: Operating Context & Tribology (Load & Oil Debris) */}
       <div>
-        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Dynamic Diagnostics & Stress (2 Signals)</h4>
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Operating Context & Tribology (2 Signals)</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <SingleTrendPlot
-            title="Torque Trend"
-            yLabel="Nm"
-            trendData={historyData?.torque_trend}
-            actualColor="#0D9488"
+            title="Operating Load Trend"
+            yLabel="%"
+            trendData={historyData?.load_percent_trend}
+            actualColor="#8B5CF6"
             degradationDay={degradationDay}
-            minClamp={50}
-            maxClamp={150}
-            minSpan={15}
-            metricType="torque"
+            minClamp={30}
+            maxClamp={110}
+            minSpan={10}
+            metricType="load_percent"
             dtick={10}
             minorDtick={2}
           />
           <SingleTrendPlot
-            title="Acoustic Emission Trend"
-            yLabel="dB"
-            trendData={historyData?.acoustic_emission_trend}
-            actualColor="#4F46E5"
+            title="Oil Debris Count Trend"
+            yLabel="particles/mL"
+            trendData={historyData?.oil_debris_count_trend}
+            actualColor="#D97706"
             degradationDay={degradationDay}
-            minClamp={20}
-            maxClamp={80}
-            minSpan={10}
-            metricType="acoustic_emission"
-            dtick={10}
-            minorDtick={2}
+            minClamp={0}
+            maxClamp={500}
+            minSpan={50}
+            metricType="oil_debris_count"
+            dtick={50}
+            minorDtick={10}
           />
         </div>
       </div>

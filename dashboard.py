@@ -349,10 +349,10 @@ with tabs[0]:
         st.metric("Power Consumption", f"{curr_rec.get('Power_Consumption', '--')} kW")
     with s_col4:
         st.metric("Pressure", f"{curr_rec.get('Pressure', '--')} bar")
-        st.metric("Torque", f"{curr_rec.get('Torque', '--')} Nm")
+        st.metric("Operating Load", f"{curr_rec.get('Load_Percent', '--')} %")
     with s_col5:
         st.metric("Speed (RPM)", f"{curr_rec.get('RPM', '--')} RPM")
-        st.metric("Acoustic Emission", f"{curr_rec.get('Acoustic_Emission', '--')} dB")
+        st.metric("Oil Debris Count", f"{curr_rec.get('Oil_Debris_Count', '--')} pt/mL")
 
 
 # ======================================================================================
@@ -580,7 +580,7 @@ with tabs[3]:
             fig3.update_layout(template="plotly_white", height=230)
             st.plotly_chart(fig3, use_container_width=True)
 
-            fig5 = px.line(df_hist, x="Step", y="Torque", title="Torque (Nm)")
+            fig5 = px.line(df_hist, x="Step", y="Load_Percent", title="Operating Load (%)")
             fig5.update_traces(line_color="#8B5CF6")
             fig5.update_layout(template="plotly_white", height=230)
             st.plotly_chart(fig5, use_container_width=True)
@@ -596,7 +596,7 @@ with tabs[3]:
             fig4.update_layout(template="plotly_white", height=230)
             st.plotly_chart(fig4, use_container_width=True)
 
-            fig6 = px.line(df_hist, x="Step", y="Acoustic_Emission", title="Acoustic Emission (dB)")
+            fig6 = px.line(df_hist, x="Step", y="Oil_Debris_Count", title="Oil Debris Count (particles/mL)")
             fig6.update_traces(line_color="#EC4899")
             fig6.update_layout(template="plotly_white", height=230)
             st.plotly_chart(fig6, use_container_width=True)

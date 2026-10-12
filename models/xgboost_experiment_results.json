@@ -1,6 +1,6 @@
 {
-  "experiment_name": "Controlled 10-Feature XGBoost Regressor Experiment",
-  "timestamp": "2026-09-23 09:22:01",
+  "experiment_name": "Controlled 10-Feature XGBoost Regressor Experiment (v2)",
+  "timestamp": "2026-10-01 10:24:32",
   "production_model": "Random Forest Regressor (10 Features)",
   "feature_count": 10,
   "features": [
@@ -12,61 +12,61 @@
     "Flow_Rate",
     "Oil_Temperature",
     "Power_Consumption",
-    "Torque",
-    "Acoustic_Emission"
+    "Load_Percent",
+    "Oil_Debris_Count"
   ],
   "dataset_size": 91250,
   "train_size": 73000,
   "test_size": 18250,
   "baseline_3feature": {
-    "r2_score": 0.8571,
-    "mae": 29.17,
-    "rmse": 40.39
+    "r2_score": 0.8278,
+    "mae": 32.48,
+    "rmse": 44.13
   },
   "random_forest": {
-    "r2_score": 0.8969,
-    "mae": 24.46,
-    "rmse": 34.16,
+    "r2_score": 0.8882,
+    "mae": 25.57,
+    "rmse": 35.56,
     "feature_importance": [
       {
         "feature": "Temperature",
-        "importance": 0.0123
+        "importance": 0.0218
       },
       {
         "feature": "Vibration",
-        "importance": 0.1661
+        "importance": 0.021
       },
       {
         "feature": "Motor_Current",
-        "importance": 0.7376
+        "importance": 0.0125
       },
       {
         "feature": "Pressure",
-        "importance": 0.0104
+        "importance": 0.0125
       },
       {
         "feature": "RPM",
-        "importance": 0.0134
+        "importance": 0.018
       },
       {
         "feature": "Flow_Rate",
-        "importance": 0.013
+        "importance": 0.0166
       },
       {
         "feature": "Oil_Temperature",
-        "importance": 0.0139
+        "importance": 0.0371
       },
       {
         "feature": "Power_Consumption",
-        "importance": 0.0103
-      },
-      {
-        "feature": "Torque",
         "importance": 0.0115
       },
       {
-        "feature": "Acoustic_Emission",
-        "importance": 0.0114
+        "feature": "Load_Percent",
+        "importance": 0.0246
+      },
+      {
+        "feature": "Oil_Debris_Count",
+        "importance": 0.8245
       }
     ]
   },
@@ -77,56 +77,56 @@
     "max_depth": 6,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
-    "r2_score": 0.8915,
-    "mae": 25.73,
-    "rmse": 35.03,
+    "r2_score": 0.8901,
+    "mae": 25.6,
+    "rmse": 35.26,
     "feature_importance": [
       {
         "feature": "Temperature",
-        "importance": 0.0041
+        "importance": 0.0187
       },
       {
         "feature": "Vibration",
-        "importance": 0.3098
+        "importance": 0.0152
       },
       {
         "feature": "Motor_Current",
-        "importance": 0.5476
+        "importance": 0.0086
       },
       {
         "feature": "Pressure",
-        "importance": 0.004
+        "importance": 0.0044
       },
       {
         "feature": "RPM",
-        "importance": 0.0043
+        "importance": 0.0069
       },
       {
         "feature": "Flow_Rate",
-        "importance": 0.0045
+        "importance": 0.0066
       },
       {
         "feature": "Oil_Temperature",
-        "importance": 0.0265
+        "importance": 0.1537
       },
       {
         "feature": "Power_Consumption",
-        "importance": 0.0869
+        "importance": 0.0056
       },
       {
-        "feature": "Torque",
-        "importance": 0.0039
+        "feature": "Load_Percent",
+        "importance": 0.0134
       },
       {
-        "feature": "Acoustic_Emission",
-        "importance": 0.0085
+        "feature": "Oil_Debris_Count",
+        "importance": 0.7668
       }
     ]
   },
   "deltas": {
-    "r2_score_delta": -0.0054,
-    "mae_days_delta": 1.27,
-    "rmse_days_delta": 0.88
+    "r2_score_delta": 0.0018,
+    "mae_days_delta": 0.04,
+    "rmse_days_delta": -0.29
   },
   "lifecycle_variable": "Machine_Health",
   "lifecycle_evaluation": [
@@ -134,61 +134,61 @@
       "region": "Early Degradation (Health >= 80%)",
       "sample_count": 9357,
       "random_forest": {
-        "r2": 0.3601,
-        "mae": 34.37,
-        "rmse": 44.2
+        "r2": 0.27,
+        "mae": 38.72,
+        "rmse": 47.21
       },
       "xgboost": {
-        "r2": 0.3295,
-        "mae": 35.97,
-        "rmse": 45.24
+        "r2": 0.2832,
+        "mae": 38.41,
+        "rmse": 46.78
       },
-      "mae_delta": 1.6
+      "mae_delta": -0.31
     },
     {
       "region": "Mid Degradation (60% <= Health < 80%)",
       "sample_count": 2127,
       "random_forest": {
-        "r2": -0.1475,
-        "mae": 9.83,
-        "rmse": 14.43
+        "r2": -0.3006,
+        "mae": 9.45,
+        "rmse": 15.37
       },
       "xgboost": {
-        "r2": -0.2734,
-        "mae": 10.69,
-        "rmse": 15.2
+        "r2": -0.0471,
+        "mae": 9.16,
+        "rmse": 13.79
       },
-      "mae_delta": 0.86
+      "mae_delta": -0.29
     },
     {
       "region": "Late Degradation (40% <= Health < 60%)",
       "sample_count": 1870,
       "random_forest": {
-        "r2": -0.3701,
-        "mae": 13.82,
-        "rmse": 17.62
+        "r2": 0.5766,
+        "mae": 7.55,
+        "rmse": 9.79
       },
       "xgboost": {
-        "r2": -0.4871,
-        "mae": 14.68,
-        "rmse": 18.36
+        "r2": 0.5407,
+        "mae": 8.15,
+        "rmse": 10.2
       },
-      "mae_delta": 0.86
+      "mae_delta": 0.6
     },
     {
       "region": "Near Failure (Health < 40%)",
       "sample_count": 4896,
       "random_forest": {
-        "r2": 0.5732,
-        "mae": 15.94,
-        "rmse": 20.16
+        "r2": 0.6704,
+        "mae": 14.31,
+        "rmse": 17.72
       },
       "xgboost": {
-        "r2": 0.5446,
-        "mae": 16.91,
-        "rmse": 20.83
+        "r2": 0.6525,
+        "mae": 14.95,
+        "rmse": 18.19
       },
-      "mae_delta": 0.97
+      "mae_delta": 0.64
     }
   ]
 }

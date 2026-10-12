@@ -44,8 +44,8 @@ class TestIsolationForestModule(unittest.TestCase):
             "Flow_Rate": np.random.normal(150.0, 1.0, n),
             "Oil_Temperature": np.random.normal(45.0, 0.3, n),
             "Power_Consumption": np.random.normal(15.0, 0.2, n),
-            "Torque": np.random.normal(81.8, 1.0, n),
-            "Acoustic_Emission": np.random.normal(40.0, 0.8, n),
+            "Load_Percent": np.random.normal(70.0, 5.0, n),
+            "Oil_Debris_Count": np.random.poisson(15, n),
             "Remaining_Useful_Life_Days": np.random.randint(50, 250, n),
             "Machine_Health": np.random.uniform(70.0, 100.0, n)
         }
@@ -101,8 +101,8 @@ class TestIsolationForestModule(unittest.TestCase):
             "Flow_Rate": 30.0,           # Normal is 150
             "Oil_Temperature": 95.0,     # Normal is 45
             "Power_Consumption": 35.0,   # Normal is 15
-            "Torque": 180.0,             # Normal is 81.8
-            "Acoustic_Emission": 85.0    # Normal is 40
+            "Load_Percent": 105.0,       # Normal is 70
+            "Oil_Debris_Count": 450      # Normal is 5-20
         }
         res = detector.predict(extreme_reading).iloc[0]
         self.assertEqual(res["anomaly_label"], "anomaly")

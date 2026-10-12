@@ -16,28 +16,29 @@ const LiveChart = ({ historyData }) => {
     RPM: { label: 'Shaft Speed (RPM)', key: 'rpm_trend', color: '#2563EB', unit: 'RPM', minClamp: 1500, maxClamp: 1900, minSpan: 60, type: 'rpm', dtick: 50, minorDtick: 10 },
     Flow_Rate: { label: 'Fluid Flow Rate (L/min)', key: 'flow_rate_trend', color: '#2563EB', unit: 'L/min', minClamp: 90, maxClamp: 180, minSpan: 15, type: 'flow', dtick: 15, minorDtick: 5 },
     Oil_Temperature: { label: 'Lube Oil Temp (°C)', key: 'oil_temperature_trend', color: '#2563EB', unit: '°C', minClamp: 35, maxClamp: 75, minSpan: 6, type: 'oil_temperature', dtick: 5, minorDtick: 1 },
-    Power_Consumption: { label: 'Power Demand (kW)', key: 'power_consumption_trend', color: '#2563EB', unit: 'kW', minClamp: 10, maxClamp: 30, minSpan: 4, type: 'power', dtick: 3, minorDtick: 1 },
-    Torque: { label: 'Shaft Torque (Nm)', key: 'torque_trend', color: '#2563EB', unit: 'Nm', minClamp: 50, maxClamp: 150, minSpan: 15, type: 'torque', dtick: 10, minorDtick: 2 },
-    Acoustic_Emission: { label: 'Acoustic Emission (dB)', key: 'acoustic_emission_trend', color: '#2563EB', unit: 'dB', minClamp: 20, maxClamp: 80, minSpan: 10, type: 'acoustic_emission', dtick: 10, minorDtick: 2 },
+    Load_Percent: { label: 'Operating Load (%)', key: 'load_percent_trend', color: '#8B5CF6', unit: '%', minClamp: 30, maxClamp: 110, minSpan: 10, type: 'load', dtick: 10, minorDtick: 2 },
+    Oil_Debris_Count: { label: 'Oil Debris (particles/mL)', key: 'oil_debris_count_trend', color: '#D97706', unit: 'pt/mL', minClamp: 0, maxClamp: 500, minSpan: 50, type: 'debris', dtick: 50, minorDtick: 10 },
   };
 
   const config = metricConfigs[selectedMetric] || metricConfigs.Temperature;
   const trend = historyData?.[config.key] || { actual: [], predicted_future: [] };
-  const healthTrend = historyData?.machine_health_trend?.actual || [];
+  const actualList = Array.isArray(trend?.actual) ? trend.actual : [];
+  const predictedList = Array.isArray(trend?.predicted_future) ? trend.predicted_future : [];
+  const healthTrend = Array.isArray(historyData?.machine_health_trend?.actual) ? historyData.machine_health_trend.actual : [];
 
-  const xHist = trend.actual.map((_, i) => i + 1);
+  const xHist = actualList.map((_, i) => i + 1);
   const latestDay = xHist.length > 0 ? xHist[xHist.length - 1] : 1;
-  const xFuture = trend.actual.length > 0
-    ? trend.predicted_future.map((_, i) => latestDay + i)
+  const xFuture = (actualList.length > 0 && predictedList.length > 0)
+    ? predictedList.map((_, i) => latestDay + i)
     : [];
 
   const visibleMin = Math.max(1, latestDay - 100);
   const visibleMax = latestDay + 20;
 
   // Purely local in-memory transformation (zero backend network calls)
-  const baseline = trend.actual.length > 0 ? trend.actual[0] : 0;
-  const yActual = isDeviationView ? trend.actual.map((v) => roundDec(v - baseline, 2)) : trend.actual;
-  const yPredicted = isDeviationView ? trend.predicted_future.map((v) => roundDec(v - baseline, 2)) : trend.predicted_future;
+  const baseline = actualList.length > 0 ? actualList[0] : 0;
+  const yActual = isDeviationView ? actualList.map((v) => roundDec(v - baseline, 2)) : actualList;
+  const yPredicted = isDeviationView ? predictedList.map((v) => roundDec(v - baseline, 2)) : predictedList;
   
   const adaptiveYRange = calculateAdaptiveYRange(
     yActual,
@@ -140,8 +141,8 @@ const LiveChart = ({ historyData }) => {
               <option value="Flow_Rate">Flow Rate (L/min)</option>
               <option value="Motor_Current">Motor Current (A)</option>
               <option value="Power_Consumption">Power Demand (kW)</option>
-              <option value="Torque">Shaft Torque (Nm)</option>
-              <option value="Acoustic_Emission">Acoustic Emission (dB)</option>
+              <option value="Load_Percent">Operating Load (%)</option>
+              <option value="Oil_Debris_Count">Oil Debris (particles/mL)</option>
             </select>
           </div>
         </div>

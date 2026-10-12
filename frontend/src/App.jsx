@@ -92,16 +92,18 @@ function App() {
 
     const fetchSecondaryData = async () => {
       try {
-        const [hist, lg, maint] = await Promise.all([
+        const [hist, lg, maint, sData] = await Promise.all([
           getHistoryData(selectedMachineId),
           getRecentLogs(selectedMachineId),
           getMaintenanceData(),
+          getStatus().catch(() => null),
         ]);
 
         if (isSubscribed) {
           setHistoryData(hist);
           setLogs(lg.logs || []);
           setMaintenanceData(maint);
+          if (sData) setStatusData(sData);
         }
       } catch (err) {
         console.warn('Failed to fetch secondary history/maintenance data:', err);

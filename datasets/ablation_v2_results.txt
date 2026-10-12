@@ -1,0 +1,73 @@
+=====================================================================================
+ PREDICTIVE MAINTENANCE FEATURE ABLATION STUDY (V2)
+=====================================================================================
+Original dataset path: C:\Users\mail2\OneDrive\Desktop\industrial-predictive-maintenance-main\datasets\sensor_data_10sensors.csv
+New dataset path:      C:\Users\mail2\OneDrive\Desktop\industrial-predictive-maintenance-main\datasets\fleet_data_v2.csv
+Results log:           C:\Users\mail2\OneDrive\Desktop\industrial-predictive-maintenance-main\datasets\ablation_v2_results.txt
+
+-------------------------------------------------------------------------------------
+ TRAINING & EVALUATING MODELS
+ Hyperparameters: RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+-------------------------------------------------------------------------------------
+
+Training (a) Baseline 10 features (ORIGINAL dataset) (10 features)...
+  -> MAE: 24.4625 Days | RMSE: 34.1573 Days | R²: 0.896852
+
+Training (b) 8 original sensors (NEW dataset) (8 features)...
+  -> MAE: 29.0712 Days | RMSE: 39.3066 Days | R²: 0.863409
+
+Training (c) 8 sensors + Load_Percent + Oil_Debris_Count (10 features)...
+  -> MAE: 25.5658 Days | RMSE: 35.5564 Days | R²: 0.888229
+
+Training (d) 8 sensors + Load_Percent only (9 features)...
+  -> MAE: 26.9610 Days | RMSE: 36.6247 Days | R²: 0.881412
+
+Training (e) 8 sensors + Oil_Debris_Count only (9 features)...
+  -> MAE: 27.2068 Days | RMSE: 37.7276 Days | R²: 0.874162
+
+=====================================================================================
+ ABLATION STUDY RESULTS SUMMARY
+=====================================================================================
+Model Configuration                              | Feats | MAE (Days) | RMSE (Days) | R² Score 
+--------------------------------------------------------------------------------------------
+(a) Baseline 10 features (ORIGINAL dataset)      | 10    | 24.4625    | 34.1573     | 0.896852 
+(b) 8 original sensors (NEW dataset)             | 8     | 29.0712    | 39.3066     | 0.863409 
+(c) 8 sensors + Load_Percent + Oil_Debris_Count  | 10    | 25.5658    | 35.5564     | 0.888229 
+(d) 8 sensors + Load_Percent only                | 9     | 26.9610    | 36.6247     | 0.881412 
+(e) 8 sensors + Oil_Debris_Count only            | 9     | 27.2068    | 37.7276     | 0.874162 
+--------------------------------------------------------------------------------------------
+
+Delta vs Baseline (a) [MAE = 24.4625 Days]:
+  (a) Baseline 10 features (ORIGINAL dataset)     : Delta MAE = +0.0000 Days
+  (b) 8 original sensors (NEW dataset)            : Delta MAE = +4.6087 Days
+  (c) 8 sensors + Load_Percent + Oil_Debris_Count : Delta MAE = +1.1033 Days
+  (d) 8 sensors + Load_Percent only               : Delta MAE = +2.4986 Days
+  (e) 8 sensors + Oil_Debris_Count only           : Delta MAE = +2.7443 Days
+
+Delta vs 8-sensor (b) [MAE = 29.0712 Days]:
+  (a) Baseline 10 features (ORIGINAL dataset)     : Delta MAE = -4.6087 Days
+  (b) 8 original sensors (NEW dataset)            : Delta MAE = +0.0000 Days
+  (c) 8 sensors + Load_Percent + Oil_Debris_Count : Delta MAE = -3.5054 Days
+  (d) 8 sensors + Load_Percent only               : Delta MAE = -2.1101 Days
+  (e) 8 sensors + Oil_Debris_Count only           : Delta MAE = -1.8643 Days
+
+=====================================================================================
+ PERMUTATION IMPORTANCE ON TEST SET: MODEL (c)
+ (8 Sensors + Load_Percent + Oil_Debris_Count)
+ Scoring metric: neg_root_mean_squared_error, 5 repeats, random_state=42
+=====================================================================================
+Rank  | Feature                | Permutation Importance (RMSE drop)  | MDI (Gini)
+--------------------------------------------------------------------------------
+1     | Oil_Debris_Count       |   +78.4235 ± 0.2277                | 0.8245
+2     | Vibration              |   +24.1238 ± 0.0651                | 0.0210
+3     | Oil_Temperature        |   +20.3851 ± 0.2358                | 0.0371
+4     | Load_Percent           |   +17.4738 ± 0.1609                | 0.0246
+5     | Temperature            |   +13.8410 ± 0.0662                | 0.0218
+6     | Motor_Current          |   +11.2081 ± 0.0251                | 0.0125
+7     | Flow_Rate              |    +5.5559 ± 0.1404                | 0.0166
+8     | RPM                    |    +4.0559 ± 0.1207                | 0.0180
+9     | Power_Consumption      |    +1.9816 ± 0.0378                | 0.0115
+10    | Pressure               |    +1.8412 ± 0.0348                | 0.0125
+--------------------------------------------------------------------------------
+
+Ablation study completed successfully. Results saved to datasets/ablation_v2_results.txt.

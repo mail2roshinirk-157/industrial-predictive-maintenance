@@ -9,7 +9,7 @@ const Analytics = ({ historyData, selectedMachineId, onSelectMachine }) => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-gray-200 gap-2">
         <div>
           <h1 className="text-base font-bold text-gray-900">Historical Trends & Fleet Comparative Analysis</h1>
-          <p className="text-xs text-gray-500">Multi-parameter machine degradation trends & 8-machine fleet overlays</p>
+          <p className="text-xs text-gray-500">Multi-parameter machine degradation trends & fleet overlays</p>
         </div>
 
         <div className="flex items-center space-x-2">
