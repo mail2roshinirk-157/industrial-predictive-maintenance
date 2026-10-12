@@ -5,10 +5,10 @@ __pycache__/
 *.so
 .Python
 build/
-develop-eggs/
 dist/
 **/dist/
-downloads/
+!frontend/dist/
+!frontend/dist/**
 eggs/
 .eggs/
 lib/
